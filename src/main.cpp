@@ -1,5 +1,6 @@
 #define VERSION 145
 /*
+//basic dmx input wireless emitter 02112024
 // version épurée sans bouton
 l'adresse normale est 1
 le canal dmx 500 donne l'offset
@@ -328,6 +329,7 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t *d
 
 void setup()
 {
+  pinMode(16, INPUT);
 
   // on utilise les pins 21 22 et 23 comme GND pour les boutons
   // pinMode(GPIO_NUM_21, OUTPUT);
@@ -606,7 +608,14 @@ void loop()
    //button2.tick();
    //display.showNumberDec(DMX::Read(1));
 
-   
+ if(digitalRead(16))
+ {
+  Serial.println("Tilt!");
+ }  
+ else
+ {
+  Serial.println("pas tilt :)");
+ }
  sendDMXvalues();
  delay(10);
 //display.showNumberDec(position);
