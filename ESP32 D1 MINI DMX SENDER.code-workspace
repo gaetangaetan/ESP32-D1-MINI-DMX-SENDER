@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "mrLEDTUBE-receiver",
+			"path": "../../../../mrLedstrip-receiver/mrLEDTUBE-receiver"
+		}
+	],
+	"settings": {}
+}
