@@ -19,6 +19,17 @@ le canal dmx 500 donne l'offset
 
 #include <dmx.h>
 
+// Définitions pour le capteur HC-SR04
+#define TRIG_PIN D4    // D4 (GPIO16) - Pin de déclenchement (Trigger)
+#define ECHO_PIN D3   // D3 (GPIO17) - Pin d'écho (Echo)
+#define SOUND_SPEED 0.034 // Vitesse du son en cm/microseconde
+
+// Variables pour le capteur HC-SR04
+long duration;
+float distance;
+unsigned long lastDistanceRead = 0;
+const unsigned long DISTANCE_READ_INTERVAL = 100; // Intervalle de lecture en ms
+
 
 const int universe = 1;      // The Art-Net universe you want to receive
 const int numChannels = 512; // Total number of channels in the universe
@@ -64,6 +75,25 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) // cette 
   //  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
 }
 
+// Fonction pour lire la distance avec le capteur HC-SR04
+float readDistance() {
+  // Nettoyer le pin TRIG
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  
+  // Envoyer un signal de 10 microsecondes
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  
+  // Lire le signal d'écho
+  duration = pulseIn(ECHO_PIN, HIGH);
+  
+  // Calculer la distance
+  distance = duration * SOUND_SPEED / 2;
+  
+  return distance;
+}
 
 
 void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t *data)
@@ -82,7 +112,10 @@ void setup()
 {
   pinMode(16, INPUT);
 
- 
+  // Configuration des pins pour le capteur HC-SR04
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  
   DMXaddress = 1;
 
   
@@ -168,11 +201,27 @@ void sendDMXvalues()
 
 void loop()
 {
+  // Lecture du capteur HC-SR04 à intervalle régulier
+  if (millis() - lastDistanceRead >= DISTANCE_READ_INTERVAL) {
+    distance = readDistance();
+    
+    // Affichage dans le moniteur série
+    Serial.print("Distance: ");
+    Serial.print(distance);
+    Serial.println(" cm");
+    
+    // Si la distance est dans une plage valide (2cm à 400cm)
+    if (distance > 2 && distance < 400) {
+      Serial.println("Capteur HC-SR04: OK");
+    } else {
+      Serial.println("Capteur HC-SR04: Hors de portée ou erreur");
+    }
+    
+    lastDistanceRead = millis();
+  }
 
- 
- sendDMXvalues();
+  //sendDMXvalues();
 
   delay(10);
-
 }
 
