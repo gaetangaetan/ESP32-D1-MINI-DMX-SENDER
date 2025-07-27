@@ -78,10 +78,25 @@ typedef struct struct_dmx_packet
   uint8_t dmxvalues[128];
 } struct_dmx_packet;
 
+// Structure pour les données de retour du Ksoloti
+typedef struct struct_ksoloti_feedback
+{
+  uint8_t startByte;    // 0xCC pour identifier les paquets de retour
+  uint8_t val1;         // Première valeur du Ksoloti
+  uint8_t val2;         // Deuxième valeur du Ksoloti
+  uint8_t checksum;     // Checksum pour validation
+} struct_ksoloti_feedback;
+
 struct_dmx_packet outgoingDMXPacket;
+struct_ksoloti_feedback incomingKsolotiData;
 
 // Adresse de diffusion ESP-NOW
 uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+// Variables pour stocker les données reçues du Ksoloti
+uint8_t ksoloti_val1 = 0;
+uint8_t ksoloti_val2 = 0;
+bool ksoloti_data_updated = false;
 
 esp_now_peer_info_t peerInfo;
 
@@ -92,6 +107,33 @@ const unsigned long EMISSION_INTERVAL = 1000 / EMISSION_FREQUENCY; // 20ms pour 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
 {
   // Callback pour le statut d'envoi (optionnel)
+}
+
+// Callback pour la réception de données ESP-NOW
+void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len)
+{
+  // Vérifier si c'est un paquet de données du Ksoloti
+  if (data_len == sizeof(struct_ksoloti_feedback)) {
+    memcpy(&incomingKsolotiData, data, sizeof(struct_ksoloti_feedback));
+    
+    // Vérifier le byte de démarrage et le checksum
+    if (incomingKsolotiData.startByte == 0xCC) {
+      uint8_t calculated_checksum = incomingKsolotiData.startByte + 
+                                   incomingKsolotiData.val1 + 
+                                   incomingKsolotiData.val2;
+      
+      if (calculated_checksum == incomingKsolotiData.checksum) {
+        ksoloti_val1 = incomingKsolotiData.val1;
+        ksoloti_val2 = incomingKsolotiData.val2;
+        ksoloti_data_updated = true;
+        
+        // Serial.print("Données Ksoloti reçues: val1=");
+        // Serial.print(ksoloti_val1);
+        // Serial.print(", val2=");
+        // Serial.println(ksoloti_val2);
+      }
+    }
+  }
 }
 
 // Fonction pour mapper la distance (2-MAX_DISTANCE_CM) vers une valeur DMX (255-0)
@@ -110,11 +152,11 @@ void setParameter(const char* paramName, uint8_t value) {
       parameters[i].value = value;
       // Mettre à jour le tableau DMX
       dmxValues[parameters[i].dmxChannel - 1] = value;
-      Serial.println("Paramètre " + String(paramName) + " = " + String(value));
+      //Serial.println("Paramètre " + String(paramName) + " = " + String(value));
       return;
     }
   }
-  Serial.println("Paramètre " + String(paramName) + " non trouvé");
+  //Serial.println("Paramètre " + String(paramName) + " non trouvé");
 }
 
 // Fonction pour obtenir la valeur d'un paramètre par son nom
@@ -143,7 +185,7 @@ void savePreset(uint8_t presetIndex, const char* presetName) {
     presets[presetIndex].values[i] = parameters[i].value;
   }
   
-  Serial.println("Preset " + String(presetIndex) + " sauvegardé en RAM: " + String(presetName));
+  //Serial.println("Preset " + String(presetIndex) + " sauvegardé en RAM: " + String(presetName));
 }
 
 // Fonction pour charger un preset
@@ -159,16 +201,16 @@ void loadPreset(uint8_t presetIndex) {
     dmxValues[parameters[i].dmxChannel - 1] = parameters[i].value;
   }
   
-  Serial.println("Preset " + String(presetIndex) + " chargé depuis RAM: " + String(presets[presetIndex].name));
+  //Serial.println("Preset " + String(presetIndex) + " chargé depuis RAM: " + String(presets[presetIndex].name));
 }
 
 // Fonction pour afficher tous les paramètres
 void printParameters() {
-  Serial.println("=== Paramètres actuels ===");
+  //Serial.println("=== Paramètres actuels ===");
   for (int i = 0; i < PRESET_SIZE; i++) {
-    Serial.println(String(parameters[i].name) + " (DMX " + String(parameters[i].dmxChannel) + "): " + String(parameters[i].value));
+    //Serial.println(String(parameters[i].name) + " (DMX " + String(parameters[i].dmxChannel) + "): " + String(parameters[i].value));
   }
-  Serial.println("==========================");
+  //Serial.println("==========================");
 }
 
 // Fonction pour initialiser les paramètres par défaut
@@ -177,7 +219,7 @@ void initializeParameters() {
     parameters[i].value = parameters[i].defaultValue;
     dmxValues[parameters[i].dmxChannel - 1] = parameters[i].value;
   }
-  Serial.println("Paramètres initialisés aux valeurs par défaut");
+  //Serial.println("Paramètres initialisés aux valeurs par défaut");
 }
 
 
@@ -217,18 +259,18 @@ void setAllParameters(uint8_t autopan, uint8_t pitch, uint8_t vibrato_speed, uin
     dmxValues[parameters[i].dmxChannel - 1] = parameters[i].value;
   }
   
-  Serial.println("Tous les paramètres mis à jour");
+  //Serial.println("Tous les paramètres mis à jour");
   printParameters();
 }
 
 // Fonction pour afficher tous les presets disponibles
 void printAllPresets() {
-  Serial.println("=== Presets disponibles ===");
+  //Serial.println("=== Presets disponibles ===");
   for (int i = 0; i < MAX_PRESETS; i++) {
-    Serial.print("Preset " + String(i) + ": " + String(presets[i].name));
-    Serial.println(" (valeurs: " + String(presets[i].values[0]) + "," + String(presets[i].values[1]) + ",...)");
+    //Serial.print("Preset " + String(i) + ": " + String(presets[i].name));
+    //Serial.println(" (valeurs: " + String(presets[i].values[0]) + "," + String(presets[i].values[1]) + ",...)");
   }
-  Serial.println("===========================");
+  //Serial.println("===========================");
 }
 
 // Fonction d'initialisation des presets
@@ -312,7 +354,7 @@ void initializePresets() {
     presets[9].values[i] = 0;
   }
   
-  Serial.println("Presets initialisés");
+  //Serial.println("Presets initialisés");
 }
 
 void setup()
@@ -320,6 +362,10 @@ void setup()
   Serial.begin(115200);
   Serial.println("=== Émetteur DMX avec Capteur Ultrasonique ===");
   Serial.println("Initialisation...");
+  
+  // Afficher l'adresse MAC de l'ESP32
+  Serial.print("Adresse MAC ESP32: ");
+  Serial.println(WiFi.macAddress());
   
   // Initialisation du tableau DMX à 0
   for (int i = 0; i < 512; i++) {
@@ -346,6 +392,7 @@ void setup()
   }
   
   esp_now_register_send_cb(OnDataSent);
+  esp_now_register_recv_cb(OnDataRecv);
   
   // Configuration du peer
   memcpy(peerInfo.peer_addr, broadcastAddress, 6);
@@ -365,22 +412,10 @@ void setup()
 
 void sendDMXvalues()
 {
-  // Lecture du capteur ultrasonique
+  // Mise à jour du paramètre "pitch" avec la valeur ultrasonique (déjà lue dans setlights())
   long distance = ultrasonic.read();
   uint8_t mappedDistance = mapDistanceToDMX(distance);
-  
-  // Mise à jour du paramètre "pitch" avec la valeur ultrasonique
   setParameter("pitch", mappedDistance);
-  
-  // Affichage debug
-  //Serial.print("Distance: " + String(distance) + "cm -> pitch = " + String(mappedDistance));
-  
-  // Affichage des valeurs DMX des canaux 101 à 119
-  Serial.print(" | DMX 101-119: ");
-  for (int i = 100; i < 119; i++) {  // dmxValues[100] = canal 101, dmxValues[118] = canal 119
-    Serial.print(dmxValues[i]);
-    if (i < 118) Serial.print(",");
-  }
   
   // Envoi des 4 paquets DMX (512 canaux divisés en 4 blocs de 128)
   for (int packetNumber = 0; packetNumber < 4; packetNumber++)
@@ -408,13 +443,34 @@ void sendDMXvalues()
     }
   }
   
-  Serial.println();
+  //Serial.println();
+}
+void setlights()
+{
+  // Utilisation de la valeur ultrasonique déjà calculée dans dmxValues
+  uint8_t mappedDistance = dmxValues[DMX_CHANNEL_ULTRASONIC - 1]; // -1 car les canaux DMX commencent à 1
+  
+  // Canal DMX 1 : Mode de contrôle (0 = intensité rouge, 1 = autre mode, etc.)
+  dmxValues[0] = 0; // Mode intensité rouge
+  
+  // Canal DMX 2 : Intensité rouge modulée par les valeurs Ksoloti
+  // Utilisation de la division flottante pour un meilleur contrôle
+  uint8_t ksoloti_modulation = (uint8_t)((float)ksoloti_val1);
+  
+  // Modulation finale avec la valeur ultrasonique
+  dmxValues[1] = (3* ksoloti_modulation * mappedDistance) / 255;
+  
+  // Debug (optionnel)
+  //Serial.print("Ultrasonic DMX: "); Serial.print(mappedDistance);
+  //Serial.print(" | Ksoloti mod: "); Serial.print(ksoloti_modulation);
+  //Serial.print(" | DMX2: "); Serial.println(dmxValues[1]);
 }
 
 void loop()
 {
   // Émission à fréquence fixe (50Hz)
   if (millis() - lastEmissionTime >= EMISSION_INTERVAL) {
+    setlights();
     sendDMXvalues();
     lastEmissionTime = millis();
   }
