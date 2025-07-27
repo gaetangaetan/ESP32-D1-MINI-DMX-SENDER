@@ -1,60 +1,77 @@
 #define VERSION 145
 /*
-// basic dmx input wireless emitter 
-// utiliser pin GPIO16 comme rx du dmx
-// version épurée sans bouton
-l'adresse normale est 1
-le canal dmx 500 donne l'offset
-- s'il vaut 0, l'adresse est 1
-- s'il vaut 47, par exemple, l'adresse est 48 (1+47)
+// Émetteur DMX sans fil avec capteur ultrasonique
+// Utilise ESP-NOW pour transmettre les données DMX
+// Fréquence d'émission : 50Hz
+// Canal DMX 102 : valeur du capteur ultrasonique (0-255)
 */
 
 #include <Arduino.h>
-#include <EEPROM.h>
-
-#define EEPROM_SIZE 32
 #include <esp_now.h>
 #include <WiFi.h>
-#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
-
-#include <dmx.h>
+#include <Ultrasonic.h>
 
 // Définitions pour le capteur HC-SR04
 #define TRIG_PIN D4    // D4 (GPIO16) - Pin de déclenchement (Trigger)
-#define ECHO_PIN D3   // D3 (GPIO17) - Pin d'écho (Echo)
-#define SOUND_SPEED 0.034 // Vitesse du son en cm/microseconde
+#define ECHO_PIN D3    // D3 (GPIO17) - Pin d'écho (Echo)
 
-// Variables pour le capteur HC-SR04
-long duration;
-float distance;
-unsigned long lastDistanceRead = 0;
-const unsigned long DISTANCE_READ_INTERVAL = 100; // Intervalle de lecture en ms
+// Configuration ESP-NOW
+#define EMISSION_FREQUENCY 50  // Hz (20ms entre chaque émission)
+#define DMX_CHANNEL_ULTRASONIC 102  // Canal DMX pour la valeur ultrasonique
+#define MAX_DISTANCE_CM 100  // Distance maximale en cm (100cm = 0, 2cm = 255)
 
+// Configuration des presets
+#define PRESET_SIZE 20  // Nombre de paramètres par preset
+#define MAX_PRESETS 10  // Nombre maximum de presets
 
-const int universe = 1;      // The Art-Net universe you want to receive
-const int numChannels = 512; // Total number of channels in the universe
+// Structure pour un paramètre
+typedef struct {
+  const char* name;     // Nom du paramètre
+  uint16_t dmxChannel;  // Canal DMX (1-512)
+  uint8_t value;        // Valeur actuelle (0-255)
+  uint8_t defaultValue; // Valeur par défaut
+} Parameter;
 
+// Structure pour un preset complet
+typedef struct {
+  char name[16];        // Nom du preset
+  uint8_t values[PRESET_SIZE]; // Valeurs des paramètres
+} Preset;
 
-#define RUNNING true
-#define SETUP false
+// Création de l'objet Ultrasonic
+Ultrasonic ultrasonic(TRIG_PIN, ECHO_PIN);
 
-#define DMXMODE true
-#define ARTNETMODE false
+// Définition des 20 paramètres du theremin
+Parameter parameters[PRESET_SIZE] = {
+  {"autopan", 101, 0, 0},
+  {"pitch", 102, 0, 0},
+  {"vibrato_speed", 103, 0, 0},
+  {"vibrato_depth", 104, 0, 0},
+  {"delay_time", 105, 0, 0},
+  {"delay_fbck", 106, 0, 0},
+  {"osc", 107, 0, 0},
+  {"gate", 108, 0, 0},
+  {"glide", 109, 0, 0},
+  {"scale", 110, 0, 0},
+  {"offset_note", 111, 0, 0},
+  {"osc2_vol", 112, 0, 0},
+  {"osc2_pitch", 113, 0, 0},
+  {"autopan_freq", 114, 0, 0},
+  {"scale_tonic", 115, 0, 0},
+  {"volume_drums", 116, 0, 0},
+  {"kick_trig", 117, 0, 0},
+  {"snare_trig", 118, 0, 0},
+  {"hh_trig", 119, 0, 0},
+  {"reserved", 120, 0, 0}  // Canal réservé pour extensions futures
+};
 
-bool etat = RUNNING;
+// Tableau des presets
+Preset presets[MAX_PRESETS];
 
-bool mode = DMXMODE;
+// Tableau des valeurs DMX (512 canaux)
+uint8_t dmxValues[512];
 
-bool manualMode = true;
-
-int flashInterval;
-
-int DMXaddress = 1;
-int offsetDMXaddress;
-
-uint8_t artnetvalues[512]; // tableau dans lequel on gardera en mémoire les valeurs DMX à transmettre
-                          // ce tableau est un peu redondant 
-
+// Structure pour les paquets DMX
 typedef struct struct_dmx_packet
 {
   uint8_t blockNumber; // on divise les 512 adresses en 4 blocs de 128 adresses
@@ -63,165 +80,345 @@ typedef struct struct_dmx_packet
 
 struct_dmx_packet outgoingDMXPacket;
 
+// Adresse de diffusion ESP-NOW
 uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 esp_now_peer_info_t peerInfo;
 
-uint8_t compteur = 0;
+// Variables de timing
+unsigned long lastEmissionTime = 0;
+const unsigned long EMISSION_INTERVAL = 1000 / EMISSION_FREQUENCY; // 20ms pour 50Hz
 
-void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) // cette fonction ne fait rien mais on doit quand même la déclarer
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
 {
-  //  Serial.print("\r\nLast Packet Send Status:\t");
-  //  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+  // Callback pour le statut d'envoi (optionnel)
 }
 
-// Fonction pour lire la distance avec le capteur HC-SR04
-float readDistance() {
-  // Nettoyer le pin TRIG
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
+// Fonction pour mapper la distance (2-MAX_DISTANCE_CM) vers une valeur DMX (255-0)
+uint8_t mapDistanceToDMX(long distance) {
+  if (distance < 2) return 255;  // Distance minimale = valeur maximale
+  if (distance > MAX_DISTANCE_CM) return 0;  // Distance maximale = valeur minimale
   
-  // Envoyer un signal de 10 microsecondes
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-  
-  // Lire le signal d'écho
-  duration = pulseIn(ECHO_PIN, HIGH);
-  
-  // Calculer la distance
-  distance = duration * SOUND_SPEED / 2;
-  
-  return distance;
+  // Mapper 2-MAX_DISTANCE_CM vers 255-0 (inversé)
+  return map(distance, 2, MAX_DISTANCE_CM, 255, 0);
 }
 
-
-void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t *data)
-{
-  for (int i = 0; i < length; i++)
-  {
-    artnetvalues[i] = data[i];
+// Fonction pour mettre à jour un paramètre par son nom
+void setParameter(const char* paramName, uint8_t value) {
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    if (strcmp(parameters[i].name, paramName) == 0) {
+      parameters[i].value = value;
+      // Mettre à jour le tableau DMX
+      dmxValues[parameters[i].dmxChannel - 1] = value;
+      Serial.println("Paramètre " + String(paramName) + " = " + String(value));
+      return;
+    }
   }
+  Serial.println("Paramètre " + String(paramName) + " non trouvé");
+}
 
- 
+// Fonction pour obtenir la valeur d'un paramètre par son nom
+uint8_t getParameter(const char* paramName) {
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    if (strcmp(parameters[i].name, paramName) == 0) {
+      return parameters[i].value;
+    }
+  }
+  return 0;
+}
+
+// Fonction pour sauvegarder un preset
+void savePreset(uint8_t presetIndex, const char* presetName) {
+  if (presetIndex >= MAX_PRESETS) {
+    Serial.println("Index de preset invalide");
+    return;
+  }
+  
+  // Copier le nom du preset
+  strncpy(presets[presetIndex].name, presetName, 15);
+  presets[presetIndex].name[15] = '\0';
+  
+  // Copier les valeurs des paramètres
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    presets[presetIndex].values[i] = parameters[i].value;
+  }
+  
+  Serial.println("Preset " + String(presetIndex) + " sauvegardé en RAM: " + String(presetName));
+}
+
+// Fonction pour charger un preset
+void loadPreset(uint8_t presetIndex) {
+  if (presetIndex >= MAX_PRESETS) {
+    Serial.println("Index de preset invalide");
+    return;
+  }
+  
+  // Appliquer les valeurs aux paramètres
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    parameters[i].value = presets[presetIndex].values[i];
+    dmxValues[parameters[i].dmxChannel - 1] = parameters[i].value;
+  }
+  
+  Serial.println("Preset " + String(presetIndex) + " chargé depuis RAM: " + String(presets[presetIndex].name));
+}
+
+// Fonction pour afficher tous les paramètres
+void printParameters() {
+  Serial.println("=== Paramètres actuels ===");
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    Serial.println(String(parameters[i].name) + " (DMX " + String(parameters[i].dmxChannel) + "): " + String(parameters[i].value));
+  }
+  Serial.println("==========================");
+}
+
+// Fonction pour initialiser les paramètres par défaut
+void initializeParameters() {
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    parameters[i].value = parameters[i].defaultValue;
+    dmxValues[parameters[i].dmxChannel - 1] = parameters[i].value;
+  }
+  Serial.println("Paramètres initialisés aux valeurs par défaut");
 }
 
 
+
+// Fonction pour enregistrer tous les paramètres d'un coup (20 arguments)
+void setAllParameters(uint8_t autopan, uint8_t pitch, uint8_t vibrato_speed, uint8_t vibrato_depth,
+                     uint8_t delay_time, uint8_t delay_fbck, uint8_t osc, uint8_t gate,
+                     uint8_t glide, uint8_t scale, uint8_t offset_note, uint8_t osc2_vol,
+                     uint8_t osc2_pitch, uint8_t autopan_freq, uint8_t scale_tonic,
+                     uint8_t volume_drums, uint8_t kick_trig, uint8_t snare_trig,
+                     uint8_t hh_trig, uint8_t reserved) {
+  
+  // Mettre à jour tous les paramètres
+  parameters[0].value = autopan;
+  parameters[1].value = pitch;
+  parameters[2].value = vibrato_speed;
+  parameters[3].value = vibrato_depth;
+  parameters[4].value = delay_time;
+  parameters[5].value = delay_fbck;
+  parameters[6].value = osc;
+  parameters[7].value = gate;
+  parameters[8].value = glide;
+  parameters[9].value = scale;
+  parameters[10].value = offset_note;
+  parameters[11].value = osc2_vol;
+  parameters[12].value = osc2_pitch;
+  parameters[13].value = autopan_freq;
+  parameters[14].value = scale_tonic;
+  parameters[15].value = volume_drums;
+  parameters[16].value = kick_trig;
+  parameters[17].value = snare_trig;
+  parameters[18].value = hh_trig;
+  parameters[19].value = reserved;
+  
+  // Mettre à jour le tableau DMX
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    dmxValues[parameters[i].dmxChannel - 1] = parameters[i].value;
+  }
+  
+  Serial.println("Tous les paramètres mis à jour");
+  printParameters();
+}
+
+// Fonction pour afficher tous les presets disponibles
+void printAllPresets() {
+  Serial.println("=== Presets disponibles ===");
+  for (int i = 0; i < MAX_PRESETS; i++) {
+    Serial.print("Preset " + String(i) + ": " + String(presets[i].name));
+    Serial.println(" (valeurs: " + String(presets[i].values[0]) + "," + String(presets[i].values[1]) + ",...)");
+  }
+  Serial.println("===========================");
+}
+
+// Fonction d'initialisation des presets
+void initializePresets() {
+  Serial.println("Initialisation des presets...");
+  
+  // Preset 0 - Preset par défaut
+  strcpy(presets[0].name, "Default");
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    presets[0].values[i] = 0;
+  }
+  
+  // Preset 1 - Configuration de base
+  strcpy(presets[1].name, "Preset1");
+  presets[1].values[0] = 0;   // autopan (101)
+  presets[1].values[1] = 0;   // pitch (102)
+  presets[1].values[2] = 61;  // vibrato_speed (103)
+  presets[1].values[3] = 8;   // vibrato_depth (104)
+  presets[1].values[4] = 107; // delay_time (105)
+  presets[1].values[5] = 114; // delay_fbck (106)
+  presets[1].values[6] = 0;   // osc (107)
+  presets[1].values[7] = 0;   // gate (108)
+  presets[1].values[8] = 117; // glide (109)
+  presets[1].values[9] = 0;   // scale (110)
+  presets[1].values[10] = 0;  // offset_note (111)
+  presets[1].values[11] = 0;  // osc2_vol (112)
+  presets[1].values[12] = 0;  // osc2_pitch (113)
+  presets[1].values[13] = 0;  // autopan_freq (114)
+  presets[1].values[14] = 0;  // scale_tonic (115)
+  presets[1].values[15] = 0;  // volume_drums (116)
+  presets[1].values[16] = 0;  // kick_trig (117)
+  presets[1].values[17] = 0;  // snare_trig (118)
+  presets[1].values[18] = 0;  // hh_trig (119)
+  presets[1].values[19] = 0;  // reserved (120)
+  
+  // Preset 2 - À définir
+  strcpy(presets[2].name, "Preset2");
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    presets[2].values[i] = 0;
+  }
+  
+  // Preset 3 - À définir
+  strcpy(presets[3].name, "Preset3");
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    presets[3].values[i] = 0;
+  }
+  
+  // Preset 4 - À définir
+  strcpy(presets[4].name, "Preset4");
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    presets[4].values[i] = 0;
+  }
+  
+  // Preset 5 - À définir
+  strcpy(presets[5].name, "Preset5");
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    presets[5].values[i] = 0;
+  }
+  
+  // Preset 6 - À définir
+  strcpy(presets[6].name, "Preset6");
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    presets[6].values[i] = 0;
+  }
+  
+  // Preset 7 - À définir
+  strcpy(presets[7].name, "Preset7");
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    presets[7].values[i] = 0;
+  }
+  
+  // Preset 8 - À définir
+  strcpy(presets[8].name, "Preset8");
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    presets[8].values[i] = 0;
+  }
+  
+  // Preset 9 - À définir
+  strcpy(presets[9].name, "Preset9");
+  for (int i = 0; i < PRESET_SIZE; i++) {
+    presets[9].values[i] = 0;
+  }
+  
+  Serial.println("Presets initialisés");
+}
 
 void setup()
 {
-  pinMode(16, INPUT);
-
-  // Configuration des pins pour le capteur HC-SR04
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
-  
-  DMXaddress = 1;
-
-  
   Serial.begin(115200);
-
-    mode = DMXMODE;
-    Serial.println("mode DMX");
-
-    DMX::Initialize();
-    
-     //display.setSegments(SEG_DMX);
-    delay(2000);
-
-    // Set device as a Wi-Fi Station
-    WiFi.mode(WIFI_STA);
-
-    // Init ESP-NOW
-    if (esp_now_init() != ESP_OK)
-    {
-      Serial.println("Error initializing ESP-NOW");
-      return;
-    }
-    
-
-    // Once ESPNow is successfully Init, we will register for Send CB to
-    // get the status of Trasnmitted packet
-    esp_now_register_send_cb(OnDataSent);
-
-    // Register peer
-    memcpy(peerInfo.peer_addr, broadcastAddress, 6);
-    peerInfo.channel = 0;
-    peerInfo.encrypt = false;
-
-    // Add peer
-    if (esp_now_add_peer(&peerInfo) != ESP_OK)
-    {
-      Serial.println("Failed to add peer");
-      return;
-    }
-    
-
-  delay(100);
-
+  Serial.println("=== Émetteur DMX avec Capteur Ultrasonique ===");
+  Serial.println("Initialisation...");
+  
+  // Initialisation du tableau DMX à 0
+  for (int i = 0; i < 512; i++) {
+    dmxValues[i] = 0;
+  }
+  
+  // Initialisation des paramètres
+  initializeParameters();
+  
+  // Initialisation des presets
+  initializePresets();
+  
+  // Chargement du preset 1 au démarrage
+  loadPreset(1);
+  
+ 
+  
+  // Configuration ESP-NOW
+  WiFi.mode(WIFI_STA);
+  
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Erreur d'initialisation ESP-NOW");
+    return;
+  }
+  
+  esp_now_register_send_cb(OnDataSent);
+  
+  // Configuration du peer
+  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  peerInfo.channel = 0;
+  peerInfo.encrypt = false;
+  
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.println("Erreur d'ajout du peer");
+    return;
+  }
+  
+  Serial.println("ESP-NOW initialisé");
+  Serial.println("Fréquence d'émission: " + String(EMISSION_FREQUENCY) + "Hz");
+  Serial.println("Canal DMX ultrasonique: " + String(DMX_CHANNEL_ULTRASONIC));
+  Serial.println("================================");
 }
-
-
 
 void sendDMXvalues()
 {
-  int offsetDMXaddress = DMXaddress - 1;
-  offsetDMXaddress = (int)(DMX::Read(400));
+  // Lecture du capteur ultrasonique
+  long distance = ultrasonic.read();
+  uint8_t mappedDistance = mapDistanceToDMX(distance);
   
+  // Mise à jour du paramètre "pitch" avec la valeur ultrasonique
+  setParameter("pitch", mappedDistance);
+  
+  // Affichage debug
+  //Serial.print("Distance: " + String(distance) + "cm -> pitch = " + String(mappedDistance));
+  
+  // Affichage des valeurs DMX des canaux 101 à 119
+  Serial.print(" | DMX 101-119: ");
+  for (int i = 100; i < 119; i++) {  // dmxValues[100] = canal 101, dmxValues[118] = canal 119
+    Serial.print(dmxValues[i]);
+    if (i < 118) Serial.print(",");
+  }
+  
+  // Envoi des 4 paquets DMX (512 canaux divisés en 4 blocs de 128)
   for (int packetNumber = 0; packetNumber < 4; packetNumber++)
   {
     outgoingDMXPacket.blockNumber = packetNumber;
+    
+    // Remplir le paquet avec les 128 valeurs correspondantes
     for (int i = 0; i < 128; i++)
     {
-      if (((packetNumber * 128) + i + offsetDMXaddress + 1) > 512)
-      {
+      int dmxIndex = (packetNumber * 128) + i;
+      if (dmxIndex < 512) {
+        outgoingDMXPacket.dmxvalues[i] = dmxValues[dmxIndex];
+      } else {
         outgoingDMXPacket.dmxvalues[i] = 0;
       }
-      else
-      {
-        if (mode == DMXMODE)
-        {
-          outgoingDMXPacket.dmxvalues[i] = DMX::Read((packetNumber * 128) + i + offsetDMXaddress + 1);
-        }
-        else
-        {
-          outgoingDMXPacket.dmxvalues[i] = artnetvalues[(packetNumber * 128) + i + offsetDMXaddress];
-        }
-      }
-    
     }
-  esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&outgoingDMXPacket, sizeof(outgoingDMXPacket));
-  }
-
-  
-
     
+    // Envoi du paquet via ESP-NOW
+    esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&outgoingDMXPacket, sizeof(outgoingDMXPacket));
+    
+    if (result == ESP_OK) {
+      Serial.print(" [OK]");
+    } else {
+      Serial.print(" [ERREUR]");
+    }
+  }
   
+  Serial.println();
 }
 
 void loop()
 {
-  // Lecture du capteur HC-SR04 à intervalle régulier
-  if (millis() - lastDistanceRead >= DISTANCE_READ_INTERVAL) {
-    distance = readDistance();
-    
-    // Affichage dans le moniteur série
-    Serial.print("Distance: ");
-    Serial.print(distance);
-    Serial.println(" cm");
-    
-    // Si la distance est dans une plage valide (2cm à 400cm)
-    if (distance > 2 && distance < 400) {
-      Serial.println("Capteur HC-SR04: OK");
-    } else {
-      Serial.println("Capteur HC-SR04: Hors de portée ou erreur");
-    }
-    
-    lastDistanceRead = millis();
+  // Émission à fréquence fixe (50Hz)
+  if (millis() - lastEmissionTime >= EMISSION_INTERVAL) {
+    sendDMXvalues();
+    lastEmissionTime = millis();
   }
-
-  //sendDMXvalues();
-
-  delay(10);
+  
+  delay(1); // Petit délai pour éviter de surcharger le CPU
 }
 

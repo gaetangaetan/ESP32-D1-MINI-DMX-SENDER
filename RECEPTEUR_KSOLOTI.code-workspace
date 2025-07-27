@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "../RECEPTEUR_KSOLOTI"
+		},
+		{
+			"name": "ESP32 D1 MINI DMX SENDER",
+			"path": "."
+		}
+	],
+	"settings": {}
+}
