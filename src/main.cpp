@@ -10,10 +10,16 @@
 #include <esp_now.h>
 #include <WiFi.h>
 #include <Ultrasonic.h>
+#include <ESP32Encoder.h>
 
 // Définitions pour le capteur HC-SR04
 #define TRIG_PIN D4    // D4 (GPIO16) - Pin de déclenchement (Trigger)
 #define ECHO_PIN D3    // D3 (GPIO17) - Pin d'écho (Echo)
+
+// Définitions pour le rotary encoder
+#define ENCODER_A_PIN D7    // D7 (GPIO23) - Pin A du rotary encoder
+#define ENCODER_B_PIN D6    // D6 (GPIO19) - Pin B du rotary encoder
+#define ENCODER_BUTTON_PIN D5  // D5 (GPIO18) - Pin bouton du rotary encoder (optionnel)
 
 // Configuration ESP-NOW
 #define EMISSION_FREQUENCY 50  // Hz (20ms entre chaque émission)
@@ -40,6 +46,9 @@ typedef struct {
 
 // Création de l'objet Ultrasonic
 Ultrasonic ultrasonic(TRIG_PIN, ECHO_PIN);
+
+// Création de l'objet Rotary Encoder
+ESP32Encoder encoder;
 
 // Définition des 20 paramètres du theremin
 Parameter parameters[PRESET_SIZE] = {
@@ -103,6 +112,15 @@ esp_now_peer_info_t peerInfo;
 // Variables de timing
 unsigned long lastEmissionTime = 0;
 const unsigned long EMISSION_INTERVAL = 1000 / EMISSION_FREQUENCY; // 20ms pour 50Hz
+
+// Variables pour le rotary encoder
+int32_t lastEncoderValue = 0;
+uint8_t selectedParameter = 0;  // Index du paramètre sélectionné (0-19)
+bool encoderButtonPressed = false;
+unsigned long lastButtonPress = 0;
+const unsigned long BUTTON_DEBOUNCE = 200; // 200ms de debounce
+unsigned long lastEncoderStatusTime = 0;
+const unsigned long ENCODER_STATUS_INTERVAL = 5000; // Affichage du statut toutes les 5 secondes
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
 {
@@ -273,6 +291,130 @@ void printAllPresets() {
   //Serial.println("===========================");
 }
 
+// Fonction d'initialisation du rotary encoder
+void initializeEncoder() {
+  // Configuration des pins du rotary encoder
+  encoder.attachHalfQuad(ENCODER_A_PIN, ENCODER_B_PIN);
+  encoder.setCount(0);
+  
+  // Configuration du bouton (optionnel)
+  pinMode(ENCODER_BUTTON_PIN, INPUT_PULLUP);
+  
+  Serial.println("=== ROTARY ENCODER INITIALISÉ ===");
+  Serial.println("Pins configurés:");
+  Serial.print("  - Pin A (CLK): D5 (GPIO18)");
+  Serial.println(" ✓");
+  Serial.print("  - Pin B (DT): D6 (GPIO19)");
+  Serial.println(" ✓");
+  Serial.print("  - Bouton (SW): D7 (GPIO23)");
+  Serial.println(" ✓");
+  Serial.println("");
+  Serial.println("=== CONTROLES ===");
+  Serial.println("🔄 Rotation: Modifie la valeur du paramètre actuel");
+  Serial.println("🔘 Bouton: Change de paramètre (cycle 0-19)");
+  Serial.println("📊 Monitor: Affiche les changements en temps réel");
+  Serial.println("=====================================");
+}
+
+// Fonction pour gérer le rotary encoder
+void handleEncoder() {
+  // Lecture de la valeur actuelle du rotary encoder
+  int32_t currentEncoderValue = encoder.getCount();
+  
+  // Si la valeur a changé, mettre à jour le paramètre sélectionné
+  if (currentEncoderValue != lastEncoderValue) {
+    int32_t delta = currentEncoderValue - lastEncoderValue;
+    
+    // Obtenir la valeur actuelle du paramètre sélectionné
+    uint8_t currentValue = parameters[selectedParameter].value;
+    
+    // Ajuster la valeur en fonction de la rotation
+    int newValue = currentValue + (delta * 2); // Multiplier par 2 pour un contrôle plus sensible
+    
+    // Limiter la valeur entre 0 et 255
+    if (newValue < 0) newValue = 0;
+    if (newValue > 255) newValue = 255;
+    
+    // Mettre à jour le paramètre
+    parameters[selectedParameter].value = (uint8_t)newValue;
+    dmxValues[parameters[selectedParameter].dmxChannel - 1] = (uint8_t)newValue;
+    
+    // Afficher les informations détaillées de debug
+    Serial.print("🔄 ROTATION: ");
+    if (delta > 0) {
+      Serial.print("+");
+    }
+    Serial.print(delta);
+    Serial.print(" | Encoder: ");
+    Serial.print(currentEncoderValue);
+    Serial.print(" | ");
+    Serial.print(parameters[selectedParameter].name);
+    Serial.print(" (DMX ");
+    Serial.print(parameters[selectedParameter].dmxChannel);
+    Serial.print("): ");
+    Serial.print(currentValue);
+    Serial.print(" → ");
+    Serial.print((uint8_t)newValue);
+    Serial.print(" [");
+    Serial.print((uint8_t)newValue * 100 / 255);
+    Serial.println("%]");
+    
+    lastEncoderValue = currentEncoderValue;
+  }
+  
+  // Gestion du bouton pour changer de paramètre
+  bool buttonState = !digitalRead(ENCODER_BUTTON_PIN); // Inversé car INPUT_PULLUP
+  
+  if (buttonState && !encoderButtonPressed && (millis() - lastButtonPress > BUTTON_DEBOUNCE)) {
+    selectedParameter = (selectedParameter + 1) % PRESET_SIZE; // Passer au paramètre suivant
+    
+    Serial.println("🔘 BOUTON PRESSÉ - Changement de paramètre");
+    Serial.print("  📋 Paramètre ");
+    Serial.print(selectedParameter);
+    Serial.print("/19: '");
+    Serial.print(parameters[selectedParameter].name);
+    Serial.print("'");
+    Serial.println("");
+    Serial.print("  📡 DMX Channel: ");
+    Serial.print(parameters[selectedParameter].dmxChannel);
+    Serial.print(" | Valeur actuelle: ");
+    Serial.print(parameters[selectedParameter].value);
+    Serial.print(" [");
+    Serial.print(parameters[selectedParameter].value * 100 / 255);
+    Serial.println("%]");
+    Serial.println("  ──────────────────────────────────────");
+    
+    encoderButtonPressed = true;
+    lastButtonPress = millis();
+  }
+  
+  if (!buttonState) {
+    encoderButtonPressed = false;
+  }
+  
+  // Affichage périodique du statut du rotary encoder
+  if (millis() - lastEncoderStatusTime >= ENCODER_STATUS_INTERVAL) {
+    Serial.println("📊 STATUT ROTARY ENCODER:");
+    Serial.print("  🎯 Paramètre actuel: ");
+    Serial.print(selectedParameter);
+    Serial.print("/19 - '");
+    Serial.print(parameters[selectedParameter].name);
+    Serial.println("'");
+    Serial.print("  📡 DMX Channel: ");
+    Serial.print(parameters[selectedParameter].dmxChannel);
+    Serial.print(" | Valeur: ");
+    Serial.print(parameters[selectedParameter].value);
+    Serial.print(" [");
+    Serial.print(parameters[selectedParameter].value * 100 / 255);
+    Serial.println("%]");
+    Serial.print("  🔢 Compteur encoder: ");
+    Serial.println(encoder.getCount());
+    Serial.println("  ──────────────────────────────────────");
+    
+    lastEncoderStatusTime = millis();
+  }
+}
+
 // Fonction d'initialisation des presets
 void initializePresets() {
   Serial.println("Initialisation des presets...");
@@ -381,7 +523,8 @@ void setup()
   // Chargement du preset 1 au démarrage
   loadPreset(1);
   
- 
+  // Initialisation du rotary encoder
+  initializeEncoder();
   
   // Configuration ESP-NOW
   WiFi.mode(WIFI_STA);
@@ -437,7 +580,7 @@ void sendDMXvalues()
     esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&outgoingDMXPacket, sizeof(outgoingDMXPacket));
     
     if (result == ESP_OK) {
-      Serial.print(" [OK]");
+      //Serial.print(" [OK]");
     } else {
       Serial.print(" [ERREUR]");
     }
@@ -468,6 +611,9 @@ void setlights()
 
 void loop()
 {
+  // Gestion du rotary encoder
+  handleEncoder();
+  
   // Émission à fréquence fixe (50Hz)
   if (millis() - lastEmissionTime >= EMISSION_INTERVAL) {
     setlights();
