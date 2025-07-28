@@ -1,4 +1,4 @@
-#define VERSION 145
+#define VERSION 160
 /*
 // Émetteur DMX sans fil avec capteur ultrasonique
 // Utilise ESP-NOW pour transmettre les données DMX
