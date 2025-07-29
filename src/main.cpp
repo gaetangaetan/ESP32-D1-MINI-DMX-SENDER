@@ -1,33 +1,77 @@
+/*Paramètres Ksoloti
+1 autopan depth
+2 pitch
+3 vibrato speed
+4 vibrato depth
+5 delay time
+6 delay feedback
+7 osc waveform
+8 gate threshold
+9 portamento time
+10 scale
+11 octave low high
+12 OSC 2 volume
+13 OSC 2 pitch offset
+14 autopan frequency
+15 scale tonic
+16 volume drums
+17 trig kick
+18 trig snare
+19 trig hh
+20 master volume (inverted)
+21 filter on-off 
+22 filter cutoff
+23 filter reso
+24 filter type
+*/
 #define VERSION 160
 /*
-// Émetteur DMX sans fil avec capteur ultrasonique
+// Contrôleur interactif ESP32 avec capteurs Sharp IR
 // Utilise ESP-NOW pour transmettre les données DMX
 // Fréquence d'émission : 50Hz
-// Canal DMX 102 : valeur du capteur ultrasonique (0-255)
+// Canal DMX 102 : valeur du capteur Sharp IR (0-255)
 */
 
 #include <Arduino.h>
 #include <esp_now.h>
 #include <WiFi.h>
-#include <Ultrasonic.h>
 #include <ESP32Encoder.h>
+#include <Wire.h>
+#include <PCF8574.h>
+#include <TM1637.h>
 
-// Définitions pour le capteur HC-SR04
-#define TRIG_PIN D4    // D4 (GPIO16) - Pin de déclenchement (Trigger)
-#define ECHO_PIN D3    // D3 (GPIO17) - Pin d'écho (Echo)
+// Définitions pour les capteurs Sharp IR
+#define DIST_SENSOR_1_PIN 35    // GPIO35 - Premier capteur Sharp IR
+#define DIST_SENSOR_2_PIN 36    // GPIO36 - Deuxième capteur Sharp IR
 
-// Définitions pour le rotary encoder
-#define ENCODER_A_PIN D7    // D7 (GPIO23) - Pin A du rotary encoder
-#define ENCODER_B_PIN D6    // D6 (GPIO19) - Pin B du rotary encoder
-#define ENCODER_BUTTON_PIN D5  // D5 (GPIO18) - Pin bouton du rotary encoder (optionnel)
+// Définitions pour les faders analogiques
+#define FADER_1_PIN 32    // GPIO32 - Premier fader
+#define FADER_2_PIN 33    // GPIO33 - Deuxième fader
+#define FADER_3_PIN 34    // GPIO34 - Troisième fader
+
+// Définitions pour l'encodeur rotatif KY-040
+#define ENCODER_A_PIN 26    // GPIO26 - Pin A de l'encodeur
+#define ENCODER_B_PIN 27    // GPIO27 - Pin B de l'encodeur
+#define ENCODER_BUTTON_PIN 25  // GPIO25 - Bouton de l'encodeur
+
+// Définitions pour l'afficheur TM1637
+#define TM1637_CLK_PIN 18    // GPIO18 - CLK de l'afficheur
+#define TM1637_DIO_PIN 19    // GPIO19 - DIO de l'afficheur
+
+// Configuration I2C pour PCF8574
+#define PCF8574_ADDRESS 0x20    // Adresse I2C du PCF8574
+#define I2C_SDA_PIN 21         // GPIO21 - SDA
+#define I2C_SCL_PIN 22         // GPIO22 - SCL
 
 // Configuration ESP-NOW
 #define EMISSION_FREQUENCY 50  // Hz (20ms entre chaque émission)
-#define DMX_CHANNEL_ULTRASONIC 102  // Canal DMX pour la valeur ultrasonique
-#define MAX_DISTANCE_CM 100  // Distance maximale en cm (100cm = 0, 2cm = 255)
+#define DMX_CHANNEL_IR_1 102  // Canal DMX pour le premier capteur Sharp IR
+#define DMX_CHANNEL_IR_2 103  // Canal DMX pour le deuxième capteur Sharp IR
+#define MAX_DISTANCE_CM 80  // Distance maximale en cm pour Sharp IR (80cm = 0, 4cm = 255)
+#define MIN_DISTANCE_CM 4   // Distance minimale en cm pour Sharp IR
 
 // Configuration des presets
-#define PRESET_SIZE 20  // Nombre de paramètres par preset
+#define PRESET_SIZE 24  // Nombre de paramètres par preset (24 au lieu de 20)
 #define MAX_PRESETS 10  // Nombre maximum de presets
 
 // Structure pour un paramètre
@@ -44,34 +88,37 @@ typedef struct {
   uint8_t values[PRESET_SIZE]; // Valeurs des paramètres
 } Preset;
 
-// Création de l'objet Ultrasonic
-Ultrasonic ultrasonic(TRIG_PIN, ECHO_PIN);
-
-// Création de l'objet Rotary Encoder
+// Création des objets
+PCF8574 pcf8574(PCF8574_ADDRESS);
+TM1637 display(TM1637_CLK_PIN, TM1637_DIO_PIN);
 ESP32Encoder encoder;
 
-// Définition des 20 paramètres du theremin
+// Définition des 24 paramètres du theremin selon la liste fournie
 Parameter parameters[PRESET_SIZE] = {
-  {"autopan", 101, 0, 0},
+  {"autopan_depth", 101, 0, 0},
   {"pitch", 102, 0, 0},
   {"vibrato_speed", 103, 0, 0},
   {"vibrato_depth", 104, 0, 0},
   {"delay_time", 105, 0, 0},
-  {"delay_fbck", 106, 0, 0},
-  {"osc", 107, 0, 0},
-  {"gate", 108, 0, 0},
-  {"glide", 109, 0, 0},
+  {"delay_feedback", 106, 0, 0},
+  {"osc_waveform", 107, 0, 0},
+  {"gate_threshold", 108, 0, 0},
+  {"portamento_time", 109, 0, 0},
   {"scale", 110, 0, 0},
-  {"offset_note", 111, 0, 0},
-  {"osc2_vol", 112, 0, 0},
-  {"osc2_pitch", 113, 0, 0},
-  {"autopan_freq", 114, 0, 0},
+  {"octave_low_high", 111, 0, 0},
+  {"osc2_volume", 112, 0, 0},
+  {"osc2_pitch_offset", 113, 0, 0},
+  {"autopan_frequency", 114, 0, 0},
   {"scale_tonic", 115, 0, 0},
   {"volume_drums", 116, 0, 0},
-  {"kick_trig", 117, 0, 0},
-  {"snare_trig", 118, 0, 0},
-  {"hh_trig", 119, 0, 0},
-  {"reserved", 120, 0, 0}  // Canal réservé pour extensions futures
+  {"trig_kick", 117, 0, 0},
+  {"trig_snare", 118, 0, 0},
+  {"trig_hh", 119, 0, 0},
+  {"master_volume", 120, 0, 0},
+  {"filter_on_off", 121, 0, 0},
+  {"filter_cutoff", 122, 0, 0},
+  {"filter_reso", 123, 0, 0},
+  {"filter_type", 124, 0, 0}
 };
 
 // Tableau des presets
@@ -113,14 +160,25 @@ esp_now_peer_info_t peerInfo;
 unsigned long lastEmissionTime = 0;
 const unsigned long EMISSION_INTERVAL = 1000 / EMISSION_FREQUENCY; // 20ms pour 50Hz
 
-// Variables pour le rotary encoder
-int32_t lastEncoderValue = 0;
-uint8_t selectedParameter = 0;  // Index du paramètre sélectionné (0-19)
-bool encoderButtonPressed = false;
-unsigned long lastButtonPress = 0;
+// Variables pour les boutons PCF8574
+bool buttonStates[3] = {false, false, false};
+bool lastButtonStates[3] = {false, false, false};
+unsigned long lastButtonPress[3] = {0, 0, 0};
 const unsigned long BUTTON_DEBOUNCE = 200; // 200ms de debounce
-unsigned long lastEncoderStatusTime = 0;
-const unsigned long ENCODER_STATUS_INTERVAL = 5000; // Affichage du statut toutes les 5 secondes
+
+// Variables pour les faders
+uint8_t faderValues[3] = {0, 0, 0};
+uint8_t lastFaderValues[3] = {0, 0, 0};
+
+// Variables pour l'encodeur
+int32_t lastEncoderValue = 0;
+uint8_t selectedPreset = 1;  // Index du preset sélectionné (0-9)
+bool encoderButtonPressed = false;
+unsigned long lastEncoderButtonPress = 0;
+
+// Variables pour l'affichage
+unsigned long lastDisplayUpdate = 0;
+const unsigned long DISPLAY_UPDATE_INTERVAL = 100; // 100ms entre les mises à jour
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
 {
@@ -152,15 +210,6 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len)
       }
     }
   }
-}
-
-// Fonction pour mapper la distance (2-MAX_DISTANCE_CM) vers une valeur DMX (255-0)
-uint8_t mapDistanceToDMX(long distance) {
-  if (distance < 2) return 255;  // Distance minimale = valeur maximale
-  if (distance > MAX_DISTANCE_CM) return 0;  // Distance maximale = valeur minimale
-  
-  // Mapper 2-MAX_DISTANCE_CM vers 255-0 (inversé)
-  return map(distance, 2, MAX_DISTANCE_CM, 255, 0);
 }
 
 // Fonction pour mettre à jour un paramètre par son nom
@@ -242,35 +291,40 @@ void initializeParameters() {
 
 
 
-// Fonction pour enregistrer tous les paramètres d'un coup (20 arguments)
-void setAllParameters(uint8_t autopan, uint8_t pitch, uint8_t vibrato_speed, uint8_t vibrato_depth,
-                     uint8_t delay_time, uint8_t delay_fbck, uint8_t osc, uint8_t gate,
-                     uint8_t glide, uint8_t scale, uint8_t offset_note, uint8_t osc2_vol,
-                     uint8_t osc2_pitch, uint8_t autopan_freq, uint8_t scale_tonic,
-                     uint8_t volume_drums, uint8_t kick_trig, uint8_t snare_trig,
-                     uint8_t hh_trig, uint8_t reserved) {
+// Fonction pour enregistrer tous les paramètres d'un coup (24 arguments)
+void setAllParameters(uint8_t autopan_depth, uint8_t pitch, uint8_t vibrato_speed, uint8_t vibrato_depth,
+                     uint8_t delay_time, uint8_t delay_feedback, uint8_t osc_waveform, uint8_t gate_threshold,
+                     uint8_t portamento_time, uint8_t scale, uint8_t octave_low_high, uint8_t osc2_volume,
+                     uint8_t osc2_pitch_offset, uint8_t autopan_frequency, uint8_t scale_tonic,
+                     uint8_t volume_drums, uint8_t trig_kick, uint8_t trig_snare, uint8_t trig_hh,
+                     uint8_t master_volume, uint8_t filter_on_off, uint8_t filter_cutoff,
+                     uint8_t filter_reso, uint8_t filter_type) {
   
   // Mettre à jour tous les paramètres
-  parameters[0].value = autopan;
+  parameters[0].value = autopan_depth;
   parameters[1].value = pitch;
   parameters[2].value = vibrato_speed;
   parameters[3].value = vibrato_depth;
   parameters[4].value = delay_time;
-  parameters[5].value = delay_fbck;
-  parameters[6].value = osc;
-  parameters[7].value = gate;
-  parameters[8].value = glide;
+  parameters[5].value = delay_feedback;
+  parameters[6].value = osc_waveform;
+  parameters[7].value = gate_threshold;
+  parameters[8].value = portamento_time;
   parameters[9].value = scale;
-  parameters[10].value = offset_note;
-  parameters[11].value = osc2_vol;
-  parameters[12].value = osc2_pitch;
-  parameters[13].value = autopan_freq;
+  parameters[10].value = octave_low_high;
+  parameters[11].value = osc2_volume;
+  parameters[12].value = osc2_pitch_offset;
+  parameters[13].value = autopan_frequency;
   parameters[14].value = scale_tonic;
   parameters[15].value = volume_drums;
-  parameters[16].value = kick_trig;
-  parameters[17].value = snare_trig;
-  parameters[18].value = hh_trig;
-  parameters[19].value = reserved;
+  parameters[16].value = trig_kick;
+  parameters[17].value = trig_snare;
+  parameters[18].value = trig_hh;
+  parameters[19].value = master_volume;
+  parameters[20].value = filter_on_off;
+  parameters[21].value = filter_cutoff;
+  parameters[22].value = filter_reso;
+  parameters[23].value = filter_type;
   
   // Mettre à jour le tableau DMX
   for (int i = 0; i < PRESET_SIZE; i++) {
@@ -291,7 +345,8 @@ void printAllPresets() {
   //Serial.println("===========================");
 }
 
-// Fonction d'initialisation du rotary encoder
+// Fonction d'initialisation du rotary encoder (désactivée - encoder non câblé)
+/*
 void initializeEncoder() {
   // Configuration des pins du rotary encoder
   encoder.attachHalfQuad(ENCODER_A_PIN, ENCODER_B_PIN);
@@ -315,8 +370,10 @@ void initializeEncoder() {
   Serial.println("📊 Monitor: Affiche les changements en temps réel");
   Serial.println("=====================================");
 }
+*/
 
-// Fonction pour gérer le rotary encoder
+// Fonction pour gérer le rotary encoder (désactivée - encoder non câblé)
+/*
 void handleEncoder() {
   // Lecture de la valeur actuelle du rotary encoder
   int32_t currentEncoderValue = encoder.getCount();
@@ -414,95 +471,216 @@ void handleEncoder() {
     lastEncoderStatusTime = millis();
   }
 }
+*/
 
 // Fonction d'initialisation des presets
 void initializePresets() {
   Serial.println("Initialisation des presets...");
   
-  // Preset 0 - Preset par défaut
-  strcpy(presets[0].name, "Default");
-  for (int i = 0; i < PRESET_SIZE; i++) {
-    presets[0].values[i] = 0;
-  }
+  // Preset 0 - Simple sans effet
+  setAllParameters(0, 0, 64, 10, 0, 0, 100, 0, 75, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0);
+  savePreset(0, "Simple");
   
-  // Preset 1 - Configuration de base
-  strcpy(presets[1].name, "Preset1");
-  presets[1].values[0] = 0;   // autopan (101)
-  presets[1].values[1] = 0;   // pitch (102)
-  presets[1].values[2] = 61;  // vibrato_speed (103)
-  presets[1].values[3] = 8;   // vibrato_depth (104)
-  presets[1].values[4] = 107; // delay_time (105)
-  presets[1].values[5] = 114; // delay_fbck (106)
-  presets[1].values[6] = 0;   // osc (107)
-  presets[1].values[7] = 0;   // gate (108)
-  presets[1].values[8] = 117; // glide (109)
-  presets[1].values[9] = 0;   // scale (110)
-  presets[1].values[10] = 0;  // offset_note (111)
-  presets[1].values[11] = 0;  // osc2_vol (112)
-  presets[1].values[12] = 0;  // osc2_pitch (113)
-  presets[1].values[13] = 0;  // autopan_freq (114)
-  presets[1].values[14] = 0;  // scale_tonic (115)
-  presets[1].values[15] = 0;  // volume_drums (116)
-  presets[1].values[16] = 0;  // kick_trig (117)
-  presets[1].values[17] = 0;  // snare_trig (118)
-  presets[1].values[18] = 0;  // hh_trig (119)
-  presets[1].values[19] = 0;  // reserved (120)
+  // Preset 1 - Simple avec effet
+  setAllParameters(0, 0, 64, 10, 90, 110, 100, 0, 75, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0);
+  savePreset(1, "Simple+Effet");
   
-  // Preset 2 - À définir
-  strcpy(presets[2].name, "Preset2");
-  for (int i = 0; i < PRESET_SIZE; i++) {
-    presets[2].values[i] = 0;
-  }
+  // Preset 2 - Octaver and growl
+  setAllParameters(0, 0, 64, 10, 90, 110, 145, 0, 75, 255, 0, 255, 140, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0);
+  savePreset(2, "OctaverGrowl");
   
-  // Preset 3 - À définir
-  strcpy(presets[3].name, "Preset3");
-  for (int i = 0; i < PRESET_SIZE; i++) {
-    presets[3].values[i] = 0;
-  }
+  // Preset 3 - Modern siren vibrafrenzy
+  setAllParameters(0, 0, 162, 129, 140, 167, 205, 0, 108, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0);
+  savePreset(3, "ModernSiren");
   
-  // Preset 4 - À définir
-  strcpy(presets[4].name, "Preset4");
-  for (int i = 0; i < PRESET_SIZE; i++) {
-    presets[4].values[i] = 0;
-  }
+  // Preset 4 - Classical
+  setAllParameters(0, 0, 59, 16, 74, 83, 255, 0, 213, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  savePreset(4, "Classical");
   
-  // Preset 5 - À définir
-  strcpy(presets[5].name, "Preset5");
-  for (int i = 0; i < PRESET_SIZE; i++) {
-    presets[5].values[i] = 0;
-  }
+  // Preset 5 - Furious octaver growl feedbacker
+  setAllParameters(0, 0, 221, 10, 74, 241, 255, 0, 91, 255, 0, 255, 196, 0, 0, 0, 0, 0, 0, 50, 0, 0, 0, 0);
+  savePreset(5, "FuriousGrowl");
   
   // Preset 6 - À définir
-  strcpy(presets[6].name, "Preset6");
-  for (int i = 0; i < PRESET_SIZE; i++) {
-    presets[6].values[i] = 0;
-  }
+  setAllParameters(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  savePreset(6, "Preset6");
   
   // Preset 7 - À définir
-  strcpy(presets[7].name, "Preset7");
-  for (int i = 0; i < PRESET_SIZE; i++) {
-    presets[7].values[i] = 0;
-  }
+  setAllParameters(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  savePreset(7, "Preset7");
   
   // Preset 8 - À définir
-  strcpy(presets[8].name, "Preset8");
-  for (int i = 0; i < PRESET_SIZE; i++) {
-    presets[8].values[i] = 0;
-  }
+  setAllParameters(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  savePreset(8, "Preset8");
   
   // Preset 9 - À définir
-  strcpy(presets[9].name, "Preset9");
-  for (int i = 0; i < PRESET_SIZE; i++) {
-    presets[9].values[i] = 0;
+  setAllParameters(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  savePreset(9, "Preset9");
+  
+  Serial.println("Presets initialisés");
+}
+
+// Fonction d'initialisation de l'interface utilisateur
+void initializeUserInterface() {
+  // Initialisation I2C
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+  
+  // Initialisation PCF8574
+  if (pcf8574.begin()) {
+    Serial.println("PCF8574 initialisé ✓");
+  } else {
+    Serial.println("Erreur PCF8574 ✗");
   }
   
-  //Serial.println("Presets initialisés");
+  // Initialisation de l'encodeur KY-040
+  encoder.attachHalfQuad(ENCODER_A_PIN, ENCODER_B_PIN);
+  encoder.setCount(0);
+  pinMode(ENCODER_BUTTON_PIN, INPUT_PULLUP);
+  
+  // Initialisation de l'afficheur TM1637
+  display.init();
+  display.setBrightness(7); // 0-7
+  display.clearScreen();
+  
+  Serial.println("Interface utilisateur initialisée");
+}
+
+// Fonction pour lire les capteurs Sharp IR
+void readSharpIRSensors() {
+  // Lecture du premier capteur Sharp IR
+  int rawValue1 = analogRead(DIST_SENSOR_1_PIN);
+  uint8_t sharpIRValue1 = rawValue1 / 16;
+  setParameter("pitch", sharpIRValue1);
+  
+  // Lecture du deuxième capteur Sharp IR
+  int rawValue2 = analogRead(DIST_SENSOR_2_PIN);
+  uint8_t sharpIRValue2 = rawValue2 / 16;
+  setParameter("vibrato_speed", sharpIRValue2);
+}
+
+// Fonction pour lire les faders
+void readFaders() {
+  faderValues[0] = analogRead(FADER_1_PIN) / 16; // 0-4095 -> 0-255
+  faderValues[1] = analogRead(FADER_2_PIN) / 16;
+  faderValues[2] = analogRead(FADER_3_PIN) / 16;
+  
+  // Mise à jour des paramètres selon les faders
+  if (faderValues[0] != lastFaderValues[0]) {
+    setParameter("filter_cutoff", faderValues[0]);
+    lastFaderValues[0] = faderValues[0];
+  }
+  
+  if (faderValues[1] != lastFaderValues[1]) {
+    setParameter("filter_reso", faderValues[1]);
+    lastFaderValues[1] = faderValues[1];
+  }
+  
+  if (faderValues[2] != lastFaderValues[2]) {
+    setParameter("delay_time", faderValues[2]);
+    lastFaderValues[2] = faderValues[2];
+  }
+}
+
+// Fonction pour gérer les boutons PCF8574
+void handleButtons() {
+  for (int i = 0; i < 3; i++) {
+    bool currentState = !pcf8574.digitalRead(i); // Inversé car INPUT_PULLUP
+    
+    if (currentState && !lastButtonStates[i] && (millis() - lastButtonPress[i] > BUTTON_DEBOUNCE)) {
+      // Bouton pressé
+      switch (i) {
+        case 0: // Bouton 1 - Charger preset 0
+          loadPreset(0);
+          Serial.println("Bouton 1 - Preset 0 chargé");
+          break;
+        case 1: // Bouton 2 - Charger preset 1
+          loadPreset(1);
+          Serial.println("Bouton 2 - Preset 1 chargé");
+          break;
+        case 2: // Bouton 3 - Charger preset 2
+          loadPreset(2);
+          Serial.println("Bouton 3 - Preset 2 chargé");
+          break;
+      }
+      lastButtonPress[i] = millis();
+    }
+    
+    lastButtonStates[i] = currentState;
+  }
+}
+
+// Fonction pour gérer l'encodeur KY-040
+void handleEncoder() {
+  int32_t currentEncoderValue = encoder.getCount();
+  
+  // Gestion de la rotation - changement de preset
+  if (currentEncoderValue != lastEncoderValue) {
+    int32_t delta = currentEncoderValue - lastEncoderValue;
+    
+    // Afficher les valeurs brutes de l'encodeur
+    Serial.print("Encodeur - Brut: ");
+    Serial.print(currentEncoderValue);
+    Serial.print(" | Delta: ");
+    Serial.print(delta);
+    
+    // Utiliser le modulo 20 puis diviser par 2 pour gérer les 2 deltas par cran physique
+    int32_t moduloValue = (currentEncoderValue % 20) / 2;
+    int32_t lastModuloValue = (lastEncoderValue % 20) / 2;
+    
+    // Détecter la direction et changer de preset
+    if (moduloValue != lastModuloValue) {
+      // Changer de preset directement selon la valeur modulo
+      selectedPreset = moduloValue % 10;
+      
+      // Charger le preset sélectionné
+      loadPreset(selectedPreset);
+      
+      Serial.print(" | Modulo/2: ");
+      Serial.print(moduloValue);
+      Serial.print(" | Preset: ");
+      Serial.print(selectedPreset);
+      Serial.print(" - ");
+      Serial.println(presets[selectedPreset].name);
+    }
+    
+    lastEncoderValue = currentEncoderValue;
+  }
+  
+  // Gestion du bouton de l'encodeur - toggle filtre on/off
+  bool buttonState = !digitalRead(ENCODER_BUTTON_PIN);
+  
+  if (buttonState && !encoderButtonPressed && (millis() - lastEncoderButtonPress > BUTTON_DEBOUNCE)) {
+    // Toggle du filtre on/off
+    uint8_t currentFilterState = getParameter("filter_on_off");
+    uint8_t newFilterState = (currentFilterState == 0) ? 255 : 0;
+    setParameter("filter_on_off", newFilterState);
+    
+    Serial.print("Bouton encodeur - Filtre: ");
+    Serial.println((newFilterState == 255) ? "ON" : "OFF");
+    
+    encoderButtonPressed = true;
+    lastEncoderButtonPress = millis();
+  }
+  
+  if (!buttonState) {
+    encoderButtonPressed = false;
+  }
+}
+
+// Fonction pour mettre à jour l'afficheur TM1637
+void updateDisplay() {
+  if (millis() - lastDisplayUpdate >= DISPLAY_UPDATE_INTERVAL) {
+    // Afficher le preset sélectionné
+    display.display(selectedPreset);
+    
+    lastDisplayUpdate = millis();
+  }
 }
 
 void setup()
 {
   Serial.begin(115200);
-  Serial.println("=== Émetteur DMX avec Capteur Ultrasonique ===");
+  Serial.println("=== Contrôleur Interactif ESP32 ===");
   Serial.println("Initialisation...");
   
   // Afficher l'adresse MAC de l'ESP32
@@ -523,8 +701,8 @@ void setup()
   // Chargement du preset 1 au démarrage
   loadPreset(1);
   
-  // Initialisation du rotary encoder
-  initializeEncoder();
+  // Initialisation de l'interface utilisateur
+  initializeUserInterface();
   
   // Configuration ESP-NOW
   WiFi.mode(WIFI_STA);
@@ -549,17 +727,16 @@ void setup()
   
   Serial.println("ESP-NOW initialisé");
   Serial.println("Fréquence d'émission: " + String(EMISSION_FREQUENCY) + "Hz");
-  Serial.println("Canal DMX ultrasonique: " + String(DMX_CHANNEL_ULTRASONIC));
+  Serial.println("Capteurs Sharp IR sur GPIO35 et GPIO36");
+  Serial.println("Faders sur GPIO32, GPIO33, GPIO34");
+  Serial.println("Encodeur KY-040 sur GPIO26, GPIO27, GPIO25");
+  Serial.println("Afficheur TM1637 sur GPIO18, GPIO19");
+  Serial.println("Boutons PCF8574 via I2C (GPIO21, GPIO22)");
   Serial.println("================================");
 }
 
 void sendDMXvalues()
 {
-  // Mise à jour du paramètre "pitch" avec la valeur ultrasonique (déjà lue dans setlights())
-  long distance = ultrasonic.read();
-  uint8_t mappedDistance = mapDistanceToDMX(distance);
-  setParameter("pitch", mappedDistance);
-  
   // Envoi des 4 paquets DMX (512 canaux divisés en 4 blocs de 128)
   for (int packetNumber = 0; packetNumber < 4; packetNumber++)
   {
@@ -588,10 +765,11 @@ void sendDMXvalues()
   
   //Serial.println();
 }
+
 void setlights()
 {
-  // Utilisation de la valeur ultrasonique déjà calculée dans dmxValues
-  uint8_t mappedDistance = dmxValues[DMX_CHANNEL_ULTRASONIC - 1]; // -1 car les canaux DMX commencent à 1
+  // Utilisation de la valeur Sharp IR déjà calculée dans dmxValues
+  uint8_t sharpIRValue1 = dmxValues[DMX_CHANNEL_IR_1 - 1]; // -1 car les canaux DMX commencent à 1
   
   // Canal DMX 1 : Mode de contrôle (0 = intensité rouge, 1 = autre mode, etc.)
   dmxValues[0] = 0; // Mode intensité rouge
@@ -600,19 +778,31 @@ void setlights()
   // Utilisation de la division flottante pour un meilleur contrôle
   uint8_t ksoloti_modulation = (uint8_t)((float)ksoloti_val1);
   
-  // Modulation finale avec la valeur ultrasonique
-  dmxValues[1] = (3* ksoloti_modulation * mappedDistance) / 255;
+  // Modulation finale avec la valeur Sharp IR
+  dmxValues[1] = (3* ksoloti_modulation * sharpIRValue1) / 255;
   
   // Debug (optionnel)
-  //Serial.print("Ultrasonic DMX: "); Serial.print(mappedDistance);
+  //Serial.print("Sharp IR DMX: "); Serial.print(sharpIRValue1);
   //Serial.print(" | Ksoloti mod: "); Serial.print(ksoloti_modulation);
   //Serial.print(" | DMX2: "); Serial.println(dmxValues[1]);
 }
 
 void loop()
 {
-  // Gestion du rotary encoder
+  // Lecture des capteurs Sharp IR
+  readSharpIRSensors();
+  
+  // Lecture des faders
+  readFaders();
+  
+  // Gestion des boutons PCF8574
+  handleButtons();
+  
+  // Gestion de l'encodeur KY-040
   handleEncoder();
+  
+  // Mise à jour de l'afficheur TM1637
+  updateDisplay();
   
   // Émission à fréquence fixe (50Hz)
   if (millis() - lastEmissionTime >= EMISSION_INTERVAL) {
