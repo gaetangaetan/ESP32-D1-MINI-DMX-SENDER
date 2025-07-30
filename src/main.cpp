@@ -60,6 +60,9 @@
 // Configuration des trigs
 #define TRIG_LENGTH 5   // Durée des trigs en nombre de paquets DMX
 
+// Configuration du dimmer RGB
+#define DIMMER_SPEED 0.01  // Vitesse de l'inertie du dimmer (0.0-1.0, plus petit = plus lent)
+
 // Structure pour un paramètre
 typedef struct {
   const char* name;     // Nom du paramètre
@@ -203,6 +206,16 @@ int irSum1 = 0;                  // Somme IR1
 int irSum2 = 0;                  // Somme IR2
 bool irInitialized1 = false;     // Initialisation IR1
 bool irInitialized2 = false;     // Initialisation IR2
+
+// Variables pour le dimmer RGB avec inertie
+float dimmerValue1 = 0.0;        // Valeur actuelle du dimmer IR1 (0.0-1.0)
+float dimmerValue2 = 0.0;        // Valeur actuelle du dimmer IR2 (0.0-1.0)
+uint8_t rgb1RedDimmed = 0;       // RGB1 rouge dimmé
+uint8_t rgb1GreenDimmed = 0;     // RGB1 vert dimmé
+uint8_t rgb1BlueDimmed = 0;      // RGB1 bleu dimmé
+uint8_t rgb2RedDimmed = 0;       // RGB2 rouge dimmé
+uint8_t rgb2GreenDimmed = 0;     // RGB2 vert dimmé
+uint8_t rgb2BlueDimmed = 0;      // RGB2 bleu dimmé
 
 // Fonction pour stabiliser un capteur IR avec moyenne mobile et limitation d'aberrants
 int stabilizeIRSensor(int newValue, int* buffer, int& index, int& sum, bool& initialized) {
@@ -476,6 +489,64 @@ int readStabilizedIRSensor(int sensorPin, int* buffer, int& index, int& sum, boo
   return stabilizedValue;
 }
 
+// Fonction pour mettre à jour le dimmer RGB avec inertie
+void updateRGBWithDimmer() {
+  // Lecture des valeurs RGB depuis les paramètres
+  uint8_t rgb1Red = getParameter("rgb1_red");
+  uint8_t rgb1Green = getParameter("rgb1_green");
+  uint8_t rgb1Blue = getParameter("rgb1_blue");
+  uint8_t rgb2Red = getParameter("rgb2_red");
+  uint8_t rgb2Green = getParameter("rgb2_green");
+  uint8_t rgb2Blue = getParameter("rgb2_blue");
+  
+  // Lecture des capteurs IR pour le dimmer
+  int stabilizedIR1 = readStabilizedIRSensor(DIST_SENSOR_1_PIN, irBuffer1, irIndex1, irSum1, irInitialized1);
+  int stabilizedIR2 = readStabilizedIRSensor(DIST_SENSOR_2_PIN, irBuffer2, irIndex2, irSum2, irInitialized2);
+  
+  // Conversion en valeurs de dimmer avec mapping 50-255 → 0-255
+  float rawDimmer1 = (float)stabilizedIR1 / 4095.0; // IR1 pour LED strip
+  float rawDimmer2 = (float)stabilizedIR2 / 4095.0; // IR2 pour DMX RGB
+  
+  // Mapping 50-255 → 0-255 (en dessous de 50 = éteint)
+  float targetDimmer1 = (rawDimmer1 < 0.196) ? 0.0 : (rawDimmer1 - 0.196) / (1.0 - 0.196); // 50/255 ≈ 0.196
+  float targetDimmer2 = (rawDimmer2 < 0.196) ? 0.0 : (rawDimmer2 - 0.196) / (1.0 - 0.196);
+  
+  // Application de l'inertie
+  dimmerValue1 += (targetDimmer1 - dimmerValue1) * DIMMER_SPEED;
+  dimmerValue2 += (targetDimmer2 - dimmerValue2) * DIMMER_SPEED;
+  
+  // Calcul des valeurs RGB dimmées (IR1 → LED strip, IR2 → DMX RGB)
+  rgb1RedDimmed = (uint8_t)(rgb1Red * dimmerValue2); // IR2 contrôle DMX RGB
+  rgb1GreenDimmed = (uint8_t)(rgb1Green * dimmerValue2);
+  rgb1BlueDimmed = (uint8_t)(rgb1Blue * dimmerValue2);
+  
+  rgb2RedDimmed = (uint8_t)(rgb2Red * dimmerValue1); // IR1 contrôle LED strip
+  rgb2GreenDimmed = (uint8_t)(rgb2Green * dimmerValue1);
+  rgb2BlueDimmed = (uint8_t)(rgb2Blue * dimmerValue1);
+  
+  // Debug (optionnel)
+  static unsigned long lastDimmerDebugTime = 0;
+  if (millis() - lastDimmerDebugTime > 2000) { // Debug toutes les 2 secondes
+    Serial.print("Dimmer - IR1(LED):");
+    Serial.print(dimmerValue1, 2);
+    Serial.print(" IR2(DMX):");
+    Serial.print(dimmerValue2, 2);
+    Serial.print(" DMX_RGB:");
+    Serial.print(rgb1RedDimmed);
+    Serial.print(",");
+    Serial.print(rgb1GreenDimmed);
+    Serial.print(",");
+    Serial.print(rgb1BlueDimmed);
+    Serial.print(" LED_RGB:");
+    Serial.print(rgb2RedDimmed);
+    Serial.print(",");
+    Serial.print(rgb2GreenDimmed);
+    Serial.print(",");
+    Serial.println(rgb2BlueDimmed);
+    lastDimmerDebugTime = millis();
+  }
+}
+
 // Fonction pour contrôler les paramètres via les entrées physiques
 void handlePhysicalControls() {
   // Lecture stabilisée du capteur IR2
@@ -514,6 +585,9 @@ void handlePhysicalControls() {
     uint8_t button3TargetValue = button3State ? button3PressedValue : button3ReleasedValue;
     setParameter(parameters[button3TargetParam].name, button3TargetValue);
   }
+  
+  // Mettre à jour le dimmer RGB
+  updateRGBWithDimmer();
   
   // Debug (optionnel)
   static unsigned long lastDebugTime = 0;
@@ -698,17 +772,17 @@ void initializePresets() {
   
   // Preset 1 - Simple avec effet
   //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37
-  setAllParameters(  0,  0,  0,  0,130,110,100,  0, 30,  0,255,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0);
+  setAllParameters(  0,  0,  0,  0,130,110,100,  0, 30,  0,255,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,255,  0,  0);
   savePreset(1, "Simple+Effet");
   
   // Preset 2 - Octaver and growl
   //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37
-  setAllParameters(  0,  0, 64, 10, 90,110,145,  0, 75,255,  0,255,140,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0);
+  setAllParameters(  0,  0, 64, 10, 90,110,145,  0, 75,255,  0,255,140,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,255);
   savePreset(2, "OctaverGrowl");
   
   // Preset 3 - Modern siren vibrafrenzy
   //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37
-  setAllParameters(  0,  0,162,129,140,167,205,  0,108,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0);
+  setAllParameters(  0,  0,162,129,140,167,205,  0,108,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,255,  0, 50);
   savePreset(3, "ModernSiren");
   
   // Preset 4 - Classical
@@ -1080,32 +1154,17 @@ void sendDMXvalues()
 
 void setlights()
 {
-  // Utilisation de la valeur Sharp IR déjà calculée dans dmxValues
-  uint8_t sharpIRValue1 = dmxValues[DMX_CHANNEL_IR_1 - 1]; // -1 car les canaux DMX commencent à 1
-  
   // Canal DMX 1 : Mode de contrôle (0 = intensité rouge, 1 = autre mode, etc.)
   dmxValues[0] = 0; // Mode intensité rouge
   
-  // Canal DMX 2 : Intensité rouge modulée par les valeurs Ksoloti
-  // Utilisation de la division flottante pour un meilleur contrôle
-  uint8_t ksoloti_modulation = (uint8_t)((float)ksoloti_val1);
+  // Canaux DMX 2, 3, 4 : RGB1 dimmé par IR1
+  dmxValues[1] = rgb1RedDimmed;    // Canal DMX 2 (R)
+  dmxValues[2] = rgb1GreenDimmed;  // Canal DMX 3 (G) 
+  dmxValues[3] = rgb1BlueDimmed;   // Canal DMX 4 (B)
   
-  // Modulation finale avec la valeur Sharp IR
-  dmxValues[1] = (3* ksoloti_modulation * sharpIRValue1) / 255;
-  
-  // Debug (optionnel)
-  //Serial.print("Sharp IR DMX: "); Serial.print(sharpIRValue1);
-  //Serial.print(" | Ksoloti mod: "); Serial.print(ksoloti_modulation);
-  //Serial.print(" | DMX2: "); Serial.println(dmxValues[1]);
-  
-  // Mise à jour du ruban WS2812B avec les canaux DMX 2, 3 et 4 (RGB)
-  uint8_t redValue = dmxValues[1];    // Canal DMX 2 (R)
-  uint8_t greenValue = dmxValues[2];  // Canal DMX 3 (G) 
-  uint8_t blueValue = dmxValues[3];   // Canal DMX 4 (B)
-  
-  // Appliquer la couleur RGB à tous les LEDs du ruban
+  // Mise à jour du ruban WS2812B avec RGB2 dimmé par IR2
   for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i] = CRGB(redValue, greenValue, blueValue);
+    leds[i] = CRGB(rgb2RedDimmed, rgb2GreenDimmed, rgb2BlueDimmed);
   }
   
   // Mettre à jour l'affichage
