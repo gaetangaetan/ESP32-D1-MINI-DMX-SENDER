@@ -1,29 +1,4 @@
-/*Paramètres Ksoloti
-1 autopan depth
-2 pitch
-3 vibrato speed
-4 vibrato depth
-5 delay time
-6 delay feedback
-7 osc waveform
-8 gate threshold
-9 portamento time
-10 scale
-11 octave low high
-12 OSC 2 volume
-13 OSC 2 pitch offset
-14 autopan frequency
-15 scale tonic
-16 volume drums
-17 trig kick
-18 trig snare
-19 trig hh
-20 master volume (inverted)
-21 filter on-off 
-22 filter cutoff
-23 filter reso
-24 filter type
-*/
+
 #define VERSION 160
 /*
 // Contrôleur interactif ESP32 avec capteurs Sharp IR
@@ -37,16 +12,19 @@
 #include <WiFi.h>
 #include <ESP32Encoder.h>
 #include <Wire.h>
-#include <PCF8574.h>
 #include <TM1637.h>
+#include <driver/adc.h>  // Pour les constantes ADC de l'ESP32
+#include <FastLED.h>     // Pour le ruban WS2812B
+
+#define CONTROL_TEST 0 // 1 pour tester les entrées, 0 pour le fonctionnement normal
 
 // Définitions pour les capteurs Sharp IR
-#define DIST_SENSOR_1_PIN 35    // GPIO35 - Premier capteur Sharp IR
+#define DIST_SENSOR_1_PIN 35    // GPIO35 - Premier capteur Sharp IR (changé pour plus de stabilité)
 #define DIST_SENSOR_2_PIN 36    // GPIO36 - Deuxième capteur Sharp IR
 
 // Définitions pour les faders analogiques
 #define FADER_1_PIN 32    // GPIO32 - Premier fader
-#define FADER_2_PIN 33    // GPIO33 - Deuxième fader
+#define FADER_2_PIN 33    // GPIO33 - Deuxième fader (changé pour éviter le conflit)
 #define FADER_3_PIN 34    // GPIO34 - Troisième fader
 
 // Définitions pour l'encodeur rotatif KY-040
@@ -58,10 +36,15 @@
 #define TM1637_CLK_PIN 18    // GPIO18 - CLK de l'afficheur
 #define TM1637_DIO_PIN 19    // GPIO19 - DIO de l'afficheur
 
-// Configuration I2C pour PCF8574
-#define PCF8574_ADDRESS 0x20    // Adresse I2C du PCF8574
-#define I2C_SDA_PIN 21         // GPIO21 - SDA
-#define I2C_SCL_PIN 22         // GPIO22 - SCL
+// Définitions pour les boutons push (remplacement du PCF8574)
+#define BUTTON_1_PIN 22    // GPIO22 - Premier bouton (libéré du PCF8574)
+#define BUTTON_2_PIN 21    // GPIO21 - Deuxième bouton (libéré du PCF8574)
+#define BUTTON_3_PIN 23    // GPIO23 - Troisième bouton (nouveau GPIO)
+
+// Définitions pour le ruban WS2812B
+#define LED_STRIP_PIN 4    // GPIO4 - Signal DATA du WS2812B
+#define NUM_LEDS 8         // Nombre de LEDs dans le ruban (ajustable)
+#define BRIGHTNESS 64      // Luminosité (0-255)
 
 // Configuration ESP-NOW
 #define EMISSION_FREQUENCY 50  // Hz (20ms entre chaque émission)
@@ -89,9 +72,11 @@ typedef struct {
 } Preset;
 
 // Création des objets
-PCF8574 pcf8574(PCF8574_ADDRESS);
 TM1637 display(TM1637_CLK_PIN, TM1637_DIO_PIN);
 ESP32Encoder encoder;
+
+// Définition du tableau de LEDs pour FastLED
+CRGB leds[NUM_LEDS];
 
 // Définition des 24 paramètres du theremin selon la liste fournie
 Parameter parameters[PRESET_SIZE] = {
@@ -179,6 +164,66 @@ unsigned long lastEncoderButtonPress = 0;
 // Variables pour l'affichage
 unsigned long lastDisplayUpdate = 0;
 const unsigned long DISPLAY_UPDATE_INTERVAL = 100; // 100ms entre les mises à jour
+
+// Variable pour le compteur d'affichage
+uint16_t displayCounter = 0;
+
+// Variables pour la stabilisation des capteurs IR - NOUVELLE STRATÉGIE
+#define IR_SAMPLE_SIZE 20  // Nombre d'échantillons pour la moyenne mobile
+#define IR_OUTLIER_THRESHOLD 100  // Seuil d'écart pour adapter les pics aberrants
+
+int irRawValues1[IR_SAMPLE_SIZE];
+int irRawValues2[IR_SAMPLE_SIZE];
+int irSampleIndex1 = 0;
+int irSampleIndex2 = 0;
+int irSum1 = 0;
+int irSum2 = 0;
+bool irInitialized1 = false;
+bool irInitialized2 = false;
+
+// Fonction pour appliquer le filtre avec adaptation progressive des aberrants
+int applyOutlierFilter(int newValue, int* buffer, int& index, int& sum, bool& initialized) {
+  // Si pas encore initialisé, remplir le tableau avec la première valeur
+  if (!initialized) {
+    for (int i = 0; i < IR_SAMPLE_SIZE; i++) {
+      buffer[i] = newValue;
+    }
+    sum = newValue * IR_SAMPLE_SIZE;
+    initialized = true;
+  }
+  
+  // Calculer la moyenne actuelle
+  int currentAverage = sum / IR_SAMPLE_SIZE;
+  
+  // Vérifier si la nouvelle valeur est un aberrant
+  int deviation = abs(newValue - currentAverage);
+  
+  if (deviation > IR_OUTLIER_THRESHOLD) {
+    // Valeur aberrante détectée, l'adapter progressivement
+    int adaptedValue;
+    if (newValue > currentAverage) {
+      // Valeur au-dessus de la moyenne, limiter à moyenne + seuil
+      adaptedValue = currentAverage + IR_OUTLIER_THRESHOLD;
+    } else {
+      // Valeur en-dessous de la moyenne, limiter à moyenne - seuil
+      adaptedValue = currentAverage - IR_OUTLIER_THRESHOLD;
+    }
+    
+    // Utiliser la valeur adaptée
+    sum -= buffer[index];
+    buffer[index] = adaptedValue;
+    sum += adaptedValue;
+    index = (index + 1) % IR_SAMPLE_SIZE;
+    return sum / IR_SAMPLE_SIZE;
+  } else {
+    // Valeur normale, l'ajouter au filtre
+    sum -= buffer[index];
+    buffer[index] = newValue;
+    sum += newValue;
+    index = (index + 1) % IR_SAMPLE_SIZE;
+    return sum / IR_SAMPLE_SIZE;
+  }
+}
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
 {
@@ -345,6 +390,40 @@ void printAllPresets() {
   //Serial.println("===========================");
 }
 
+// Fonction pour calculer la moyenne d'un tableau
+int calculateAverage(int* values, int size) {
+  long sum = 0;
+  for (int i = 0; i < size; i++) {
+    sum += values[i];
+  }
+  return sum / size;
+}
+
+// Fonction pour appliquer un filtre passe-bas
+float applyLowPassFilter(float currentValue, float newValue, float alpha) {
+  return alpha * newValue + (1.0 - alpha) * currentValue;
+}
+
+// Fonction pour stabiliser une valeur avec debouncing
+int stabilizeValue(int newValue, int lastValue, int threshold) {
+  int difference = abs(newValue - lastValue);
+  if (difference <= threshold) {
+    return lastValue; // Ignorer les petites variations
+  }
+  return newValue;
+}
+
+// Fonction pour lire et stabiliser un capteur IR - NOUVELLE STRATÉGIE
+int readStabilizedIRSensor(int sensorPin, int* rawValues, int& sampleIndex, int& sum, bool& initialized) {
+  // Lecture brute
+  int rawValue = analogRead(sensorPin);
+  
+  // Application du filtre avec adaptation progressive des aberrants
+  int filteredValue = applyOutlierFilter(rawValue, rawValues, sampleIndex, sum, initialized);
+  
+  return filteredValue;
+}
+
 // Fonction d'initialisation du rotary encoder (désactivée - encoder non câblé)
 /*
 void initializeEncoder() {
@@ -473,6 +552,32 @@ void handleEncoder() {
 }
 */
 
+/*Paramètres Ksoloti
+1 autopan depth
+2 pitch
+3 vibrato speed
+4 vibrato depth
+5 delay time
+6 delay feedback
+7 osc waveform
+8 gate threshold
+9 portamento time
+10 scale
+11 octave low high
+12 OSC 2 volume
+13 OSC 2 pitch offset
+14 autopan frequency
+15 scale tonic
+16 volume drums
+17 trig kick
+18 trig snare
+19 trig hh
+20 master volume (inverted)
+21 filter on-off 
+22 filter cutoff
+23 filter reso
+24 filter type
+*/
 // Fonction d'initialisation des presets
 void initializePresets() {
   Serial.println("Initialisation des presets...");
@@ -482,7 +587,7 @@ void initializePresets() {
   savePreset(0, "Simple");
   
   // Preset 1 - Simple avec effet
-  setAllParameters(0, 0, 64, 10, 90, 110, 100, 0, 75, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0);
+  setAllParameters(0, 0, 0, 0, 130, 110, 100, 0, 30, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0);
   savePreset(1, "Simple+Effet");
   
   // Preset 2 - Octaver and growl
@@ -522,15 +627,17 @@ void initializePresets() {
 
 // Fonction d'initialisation de l'interface utilisateur
 void initializeUserInterface() {
-  // Initialisation I2C
-  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+ 
+  // Configuration des boutons push
+  pinMode(BUTTON_1_PIN, INPUT_PULLUP);
+  pinMode(BUTTON_2_PIN, INPUT_PULLUP);
+  pinMode(BUTTON_3_PIN, INPUT_PULLUP);
   
-  // Initialisation PCF8574
-  if (pcf8574.begin()) {
-    Serial.println("PCF8574 initialisé ✓");
-  } else {
-    Serial.println("Erreur PCF8574 ✗");
-  }
+  // Initialisation du ruban WS2812B
+  FastLED.addLeds<WS2812B, LED_STRIP_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.setBrightness(BRIGHTNESS);
+  FastLED.clear();
+  FastLED.show();
   
   // Initialisation de l'encodeur KY-040
   encoder.attachHalfQuad(ENCODER_A_PIN, ENCODER_B_PIN);
@@ -541,21 +648,34 @@ void initializeUserInterface() {
   display.init();
   display.setBrightness(7); // 0-7
   display.clearScreen();
-  
+ 
+    // Configuration ADC pour une meilleure résolution
+    analogReadResolution(12); // 12 bits (0-4095)
+
   Serial.println("Interface utilisateur initialisée");
 }
 
-// Fonction pour lire les capteurs Sharp IR
+// Fonction pour lire les capteurs Sharp IR avec stabilisation - NOUVELLE STRATÉGIE
 void readSharpIRSensors() {
-  // Lecture du premier capteur Sharp IR
-  int rawValue1 = analogRead(DIST_SENSOR_1_PIN);
-  uint8_t sharpIRValue1 = rawValue1 / 16;
+  // Lecture stabilisée du premier capteur Sharp IR
+  int stabilizedValue1 = readStabilizedIRSensor(DIST_SENSOR_1_PIN, irRawValues1, irSampleIndex1, irSum1, irInitialized1);
+  uint8_t sharpIRValue1 = stabilizedValue1 / 16;
   setParameter("pitch", sharpIRValue1);
   
-  // Lecture du deuxième capteur Sharp IR
-  int rawValue2 = analogRead(DIST_SENSOR_2_PIN);
-  uint8_t sharpIRValue2 = rawValue2 / 16;
+  // Lecture stabilisée du deuxième capteur Sharp IR
+  int stabilizedValue2 = readStabilizedIRSensor(DIST_SENSOR_2_PIN, irRawValues2, irSampleIndex2, irSum2, irInitialized2);
+  uint8_t sharpIRValue2 = stabilizedValue2 / 16;
   setParameter("vibrato_speed", sharpIRValue2);
+  
+  // Debug minimal
+  Serial.print("IR1: ");
+  Serial.print(stabilizedValue1);
+  Serial.print(" -> ");
+  Serial.print(sharpIRValue1);
+  Serial.print(" | IR2: ");
+  Serial.print(stabilizedValue2);
+  Serial.print(" -> ");
+  Serial.println(sharpIRValue2);
 }
 
 // Fonction pour lire les faders
@@ -581,32 +701,36 @@ void readFaders() {
   }
 }
 
-// Fonction pour gérer les boutons PCF8574
+// Fonction pour gérer les boutons push
 void handleButtons() {
-  for (int i = 0; i < 3; i++) {
-    bool currentState = !pcf8574.digitalRead(i); // Inversé car INPUT_PULLUP
-    
-    if (currentState && !lastButtonStates[i] && (millis() - lastButtonPress[i] > BUTTON_DEBOUNCE)) {
-      // Bouton pressé
-      switch (i) {
-        case 0: // Bouton 1 - Charger preset 0
-          loadPreset(0);
-          Serial.println("Bouton 1 - Preset 0 chargé");
-          break;
-        case 1: // Bouton 2 - Charger preset 1
-          loadPreset(1);
-          Serial.println("Bouton 2 - Preset 1 chargé");
-          break;
-        case 2: // Bouton 3 - Charger preset 2
-          loadPreset(2);
-          Serial.println("Bouton 3 - Preset 2 chargé");
-          break;
-      }
-      lastButtonPress[i] = millis();
-    }
-    
-    lastButtonStates[i] = currentState;
+  // Lecture des boutons
+  bool button1State = !digitalRead(BUTTON_1_PIN); // Inversé car INPUT_PULLUP
+  bool button2State = !digitalRead(BUTTON_2_PIN);
+  bool button3State = !digitalRead(BUTTON_3_PIN);
+  
+  // Bouton 1 - Charger preset 0
+  if (button1State && !lastButtonStates[0] && (millis() - lastButtonPress[0] > BUTTON_DEBOUNCE)) {
+    loadPreset(0);
+    Serial.println("Bouton 1 - Preset 0 chargé");
+    lastButtonPress[0] = millis();
   }
+  lastButtonStates[0] = button1State;
+  
+  // Bouton 2 - Charger preset 1
+  if (button2State && !lastButtonStates[1] && (millis() - lastButtonPress[1] > BUTTON_DEBOUNCE)) {
+    loadPreset(1);
+    Serial.println("Bouton 2 - Preset 1 chargé");
+    lastButtonPress[1] = millis();
+  }
+  lastButtonStates[1] = button2State;
+  
+  // Bouton 3 - Charger preset 2
+  if (button3State && !lastButtonStates[2] && (millis() - lastButtonPress[2] > BUTTON_DEBOUNCE)) {
+    loadPreset(2);
+    Serial.println("Bouton 3 - Preset 2 chargé");
+    lastButtonPress[2] = millis();
+  }
+  lastButtonStates[2] = button3State;
 }
 
 // Fonction pour gérer l'encodeur KY-040
@@ -683,6 +807,10 @@ void setup()
   Serial.println("=== Contrôleur Interactif ESP32 ===");
   Serial.println("Initialisation...");
   
+  // Désactiver le Bluetooth pour améliorer la stabilité des lectures analogiques
+  btStop();
+  Serial.println("Bluetooth désactivé pour optimiser les lectures ADC");
+  
   // Afficher l'adresse MAC de l'ESP32
   Serial.print("Adresse MAC ESP32: ");
   Serial.println(WiFi.macAddress());
@@ -731,7 +859,7 @@ void setup()
   Serial.println("Faders sur GPIO32, GPIO33, GPIO34");
   Serial.println("Encodeur KY-040 sur GPIO26, GPIO27, GPIO25");
   Serial.println("Afficheur TM1637 sur GPIO18, GPIO19");
-  Serial.println("Boutons PCF8574 via I2C (GPIO21, GPIO22)");
+  Serial.println("Boutons push sur GPIO21, GPIO22, GPIO23");
   Serial.println("================================");
 }
 
@@ -785,24 +913,123 @@ void setlights()
   //Serial.print("Sharp IR DMX: "); Serial.print(sharpIRValue1);
   //Serial.print(" | Ksoloti mod: "); Serial.print(ksoloti_modulation);
   //Serial.print(" | DMX2: "); Serial.println(dmxValues[1]);
+  
+  // Mise à jour du ruban WS2812B avec les canaux DMX 2, 3 et 4 (RGB)
+  uint8_t redValue = dmxValues[1];    // Canal DMX 2 (R)
+  uint8_t greenValue = dmxValues[2];  // Canal DMX 3 (G) 
+  uint8_t blueValue = dmxValues[3];   // Canal DMX 4 (B)
+  
+  // Appliquer la couleur RGB à tous les LEDs du ruban
+  for (int i = 0; i < NUM_LEDS; i++) {
+    leds[i] = CRGB(redValue, greenValue, blueValue);
+  }
+  
+  // Mettre à jour l'affichage
+  FastLED.show();
 }
 
+void testInputs() {
+  // Affichage compact des valeurs brutes
+  
+  // Lecture des capteurs Sharp IR (valeurs brutes 0-4095)
+  int irRaw1 = analogRead(DIST_SENSOR_1_PIN);
+  int irRaw2 = analogRead(DIST_SENSOR_2_PIN);
+  
+  // Lecture des faders (valeurs brutes 0-4095)
+  int fader1Raw = analogRead(FADER_1_PIN);
+  int fader2Raw = analogRead(FADER_2_PIN);
+  int fader3Raw = analogRead(FADER_3_PIN);
+  
+  // Lecture des boutons (0 ou 1)
+  bool button1State = !digitalRead(BUTTON_1_PIN); // Bouton 1 sur GPIO22
+  bool button2State = !digitalRead(BUTTON_2_PIN); // Bouton 2 sur GPIO21
+  bool button3State = !digitalRead(BUTTON_3_PIN);
+  
+  // Lecture de l'encodeur
+  int32_t encoderValue = encoder.getCount();
+  bool encoderButtonState = !digitalRead(ENCODER_BUTTON_PIN);
+  
+  // Mapper les faders sur 0-255 pour DMX 2, 3, 4 (inversés)
+  uint8_t fader1Mapped = (4095 - fader1Raw) / 16; // 4095-0 → 0-255
+  uint8_t fader2Mapped = (4095 - fader2Raw) / 16;
+  uint8_t fader3Mapped = (4095 - fader3Raw) / 16;
+  
+  // Assigner aux canaux DMX 2, 3, 4
+  dmxValues[1] = fader1Mapped; // DMX 2 (Rouge)
+  dmxValues[2] = fader2Mapped; // DMX 3 (Vert)
+  dmxValues[3] = fader3Mapped; // DMX 4 (Bleu)
+  
+  // Affichage compact sur une ligne
+  Serial.print("IR1 ");
+  Serial.print(irRaw1);
+  Serial.print(" | IR2 ");
+  Serial.print(irRaw2);
+  Serial.print(" | F1 ");
+  Serial.print(fader1Raw);
+  Serial.print(" | F2 ");
+  Serial.print(fader2Raw);
+  Serial.print(" | F3 ");
+  Serial.print(fader3Raw);
+  Serial.print(" | B1 ");
+  Serial.print(button1State ? "1" : "0");
+  Serial.print(" | B2 ");
+  Serial.print(button2State ? "1" : "0");
+  Serial.print(" | B3 ");
+  Serial.print(button3State ? "1" : "0");
+  Serial.print(" | ENC ");
+  Serial.print(encoderValue);
+  Serial.print(" | ENCB ");
+  Serial.print(encoderButtonState ? "1" : "0");
+  Serial.print(" | DMX2 ");
+  Serial.print(dmxValues[1]);
+  Serial.print(" | DMX3 ");
+  Serial.print(dmxValues[2]);
+  Serial.print(" | DMX4 ");
+  Serial.print(dmxValues[3]);
+  Serial.println();
+  
+  // Afficher le compteur sur le 4-digit display
+  display.display(displayCounter);
+  
+  // Mettre à jour le LED strip avec les valeurs DMX 2, 3, 4
+  uint8_t redValue = dmxValues[1];    // Canal DMX 2 (R)
+  uint8_t greenValue = dmxValues[2];  // Canal DMX 3 (G) 
+  uint8_t blueValue = dmxValues[3];   // Canal DMX 4 (B)
+  
+  // Appliquer la couleur RGB à tous les LEDs du ruban
+  for (int i = 0; i < NUM_LEDS; i++) {
+    leds[i] = CRGB(redValue, greenValue, blueValue);
+  }
+  
+  // Mettre à jour l'affichage
+  FastLED.show();
+}
 void loop()
 {
-  // Lecture des capteurs Sharp IR
-  readSharpIRSensors();
+  // Incrémenter le compteur d'affichage
+  displayCounter++;
+  
+  if (CONTROL_TEST == 1) {
+    // affichage des valeurs brutes des capteurs, boutons, faders, encodeur
+    testInputs();
+    delay(500);
+  }
+  else // fonctionnement normal
+  {
+
+ 
   
   // Lecture des faders
-  readFaders();
+ // readFaders();
   
   // Gestion des boutons PCF8574
-  handleButtons();
+  //handleButtons();
   
   // Gestion de l'encodeur KY-040
-  handleEncoder();
+ // handleEncoder();
   
   // Mise à jour de l'afficheur TM1637
-  updateDisplay();
+  //updateDisplay();
   
   // Émission à fréquence fixe (50Hz)
   if (millis() - lastEmissionTime >= EMISSION_INTERVAL) {
@@ -814,3 +1041,4 @@ void loop()
   delay(1); // Petit délai pour éviter de surcharger le CPU
 }
 
+}
