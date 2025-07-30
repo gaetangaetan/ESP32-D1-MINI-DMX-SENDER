@@ -12,7 +12,7 @@
 #include <WiFi.h>
 #include <ESP32Encoder.h>
 #include <Wire.h>
-#include <TM1637.h>
+#include <TM1637Display.h>
 #include <driver/adc.h>  // Pour les constantes ADC de l'ESP32
 #include <FastLED.h>     // Pour le ruban WS2812B
 
@@ -72,7 +72,7 @@ typedef struct {
 } Preset;
 
 // Création des objets
-TM1637 display(TM1637_CLK_PIN, TM1637_DIO_PIN);
+TM1637Display display(TM1637_CLK_PIN, TM1637_DIO_PIN);
 ESP32Encoder encoder;
 
 // Définition du tableau de LEDs pour FastLED
@@ -149,7 +149,7 @@ const unsigned long EMISSION_INTERVAL = 1000 / EMISSION_FREQUENCY; // 20ms pour 
 bool buttonStates[3] = {false, false, false};
 bool lastButtonStates[3] = {false, false, false};
 unsigned long lastButtonPress[3] = {0, 0, 0};
-const unsigned long BUTTON_DEBOUNCE = 200; // 200ms de debounce
+const unsigned long BUTTON_DEBOUNCE = 10; // 200ms de debounce
 
 // Variables pour les faders
 uint8_t faderValues[3] = {0, 0, 0};
@@ -562,43 +562,53 @@ void initializePresets() {
   Serial.println("Initialisation des presets...");
   
   // Preset 0 - Simple sans effet
-  setAllParameters(0, 0, 64, 10, 0, 0, 100, 0, 75, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24
+  setAllParameters(  0,  0, 64, 10,  0,  0,100,  0, 75,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0);
   savePreset(0, "Simple");
   
   // Preset 1 - Simple avec effet
-  setAllParameters(0, 0, 0, 0, 130, 110, 100, 0, 30, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24
+  setAllParameters(  0,  0,  0,  0,130,110,100,  0, 30,  0,255,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0);
   savePreset(1, "Simple+Effet");
   
   // Preset 2 - Octaver and growl
-  setAllParameters(0, 0, 64, 10, 90, 110, 145, 0, 75, 255, 0, 255, 140, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24
+  setAllParameters(  0,  0, 64, 10, 90,110,145,  0, 75,255,  0,255,140,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0);
   savePreset(2, "OctaverGrowl");
   
   // Preset 3 - Modern siren vibrafrenzy
-  setAllParameters(0, 0, 162, 129, 140, 167, 205, 0, 108, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 0);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24
+  setAllParameters(  0,  0,162,129,140,167,205,  0,108,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0);
   savePreset(3, "ModernSiren");
   
   // Preset 4 - Classical
-  setAllParameters(0, 0, 59, 16, 74, 83, 255, 0, 213, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24
+  setAllParameters(  0,  0, 59, 16, 74, 83,255,  0,213,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0);
   savePreset(4, "Classical");
   
   // Preset 5 - Furious octaver growl feedbacker
-  setAllParameters(0, 0, 221, 10, 74, 241, 255, 0, 91, 255, 0, 255, 196, 0, 0, 0, 0, 0, 0, 50, 0, 0, 0, 0);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24
+  setAllParameters(  0,  0,221, 10, 74,241,255,  0, 91,255,  0,255,196,  0,  0,255,  0,  0,  0, 50,  0,  0,  0,  0);
   savePreset(5, "FuriousGrowl");
   
   // Preset 6 - À définir
-  setAllParameters(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24
+  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0);
   savePreset(6, "Preset6");
   
   // Preset 7 - À définir
-  setAllParameters(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24
+  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0);
   savePreset(7, "Preset7");
   
   // Preset 8 - À définir
-  setAllParameters(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24
+  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0);
   savePreset(8, "Preset8");
   
   // Preset 9 - À définir
-  setAllParameters(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24
+  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0);
   savePreset(9, "Preset9");
   
   Serial.println("Presets initialisés");
@@ -624,9 +634,8 @@ void initializeUserInterface() {
   pinMode(ENCODER_BUTTON_PIN, INPUT_PULLUP);
   
   // Initialisation de l'afficheur TM1637
-  display.init();
   display.setBrightness(7); // 0-7
-  display.clearScreen();
+  display.clear();
  
     // Configuration ADC pour une meilleure résolution
     analogReadResolution(12); // 12 bits (0-4095)
@@ -687,26 +696,26 @@ void handleButtons() {
   bool button2State = !digitalRead(BUTTON_2_PIN);
   bool button3State = !digitalRead(BUTTON_3_PIN);
   
-  // Bouton 1 - Charger preset 0
+  // Bouton 1 - Déclencher trig_kick (paramètre 17, canal DMX 117)
   if (button1State && !lastButtonStates[0] && (millis() - lastButtonPress[0] > BUTTON_DEBOUNCE)) {
-    loadPreset(0);
-    Serial.println("Bouton 1 - Preset 0 chargé");
+    dmxValues[116] = 255; // Canal DMX 117 (index 116)
+    //Serial.println("Bouton 1 - Trig Kick déclenché");
     lastButtonPress[0] = millis();
   }
   lastButtonStates[0] = button1State;
   
-  // Bouton 2 - Charger preset 1
+  // Bouton 2 - Déclencher trig_snare (paramètre 18, canal DMX 118)
   if (button2State && !lastButtonStates[1] && (millis() - lastButtonPress[1] > BUTTON_DEBOUNCE)) {
-    loadPreset(1);
-    Serial.println("Bouton 2 - Preset 1 chargé");
+    dmxValues[117] = 255; // Canal DMX 118 (index 117)
+    //Serial.println("Bouton 2 - Trig Snare déclenché");
     lastButtonPress[1] = millis();
   }
   lastButtonStates[1] = button2State;
   
   // Bouton 3 - Charger preset 2
   if (button3State && !lastButtonStates[2] && (millis() - lastButtonPress[2] > BUTTON_DEBOUNCE)) {
-    loadPreset(2);
-    Serial.println("Bouton 3 - Preset 2 chargé");
+    dmxValues[116] = 255; // KICK
+    //Serial.println("Bouton 3 - Preset 2 chargé");
     lastButtonPress[2] = millis();
   }
   lastButtonStates[2] = button3State;
@@ -715,15 +724,11 @@ void handleButtons() {
 // Fonction pour gérer l'encodeur KY-040
 void handleEncoder() {
   int32_t currentEncoderValue = - encoder.getCount();
-  Serial.print("currentEncoderValue: ");
-  Serial.print(currentEncoderValue);
   
   // Calculer le preset selon la formule : |valeur_encoder / 2| % 10
   // Utiliser la valeur absolue pour éviter les problèmes avec les grandes valeurs négatives
   int32_t normalizedValue = abs(currentEncoderValue / 2);
   uint8_t newPreset = normalizedValue % MAX_PRESETS;
-  Serial.print(" - newPreset: ");
-  Serial.println(newPreset);
   
   // Si le preset a changé
   if (newPreset != selectedPreset) {
@@ -732,16 +737,15 @@ void handleEncoder() {
     // Charger le preset sélectionné
     loadPreset(selectedPreset);
     
-    // Afficher le numéro du preset sur le display (aligné à droite)
-    display.clearScreen();
-    //display.display(selectedPreset,true,true,3);
-    display.display(selectedPreset);
-    /*
+    // Afficher le numéro du preset sur le display avec indicateur
+    display.clear();    
+    display.showNumberDec(selectedPreset);
+    
+    // Debug sur le moniteur série
     Serial.print("Preset changé: ");
     Serial.print(selectedPreset);
     Serial.print(" - ");
     Serial.println(presets[selectedPreset].name);
-    */
   }
   
   // Gestion du bouton de l'encodeur (toggle filtre)
@@ -750,6 +754,14 @@ void handleEncoder() {
     uint8_t currentFilterState = getParameter("filter_on_off");
     uint8_t newFilterState = (currentFilterState == 0) ? 255 : 0;
     setParameter("filter_on_off", newFilterState);
+    
+    // Afficher l'état du filtre sur le display
+    display.clear();
+    if (newFilterState == 255) {
+      display.showNumberDec(9999); // Afficher "9999" pour indiquer FILTRE ON
+    } else {
+      display.showNumberDec(0);    // Afficher "0000" pour indiquer FILTRE OFF
+    }
     
     Serial.print("Filtre: ");
     Serial.println((newFilterState == 255) ? "ON" : "OFF");
@@ -766,8 +778,10 @@ void handleEncoder() {
 // Fonction pour mettre à jour l'afficheur TM1637
 void updateDisplay() {
   if (millis() - lastDisplayUpdate >= DISPLAY_UPDATE_INTERVAL) {
-    // Afficher le preset sélectionné
-    display.display(selectedPreset);
+    // Afficher le preset sélectionné avec un indicateur visuel
+    // Format: "P-XX" où XX est le numéro du preset
+    
+    display.showNumberDec(selectedPreset);
     
     lastDisplayUpdate = millis();
   }
@@ -863,6 +877,10 @@ void sendDMXvalues()
     }
   }
   
+  // Remettre les canaux trig_kick et trig_snare à zéro après l'envoi
+  dmxValues[116] = 0; // Canal DMX 117 (trig_kick)
+  dmxValues[117] = 0; // Canal DMX 118 (trig_snare)
+  
   //Serial.println();
 }
 
@@ -918,7 +936,7 @@ void testInputs() {
   bool button3State = !digitalRead(BUTTON_3_PIN);
   
   // Lecture de l'encodeur
-  int32_t encoderValue = encoder.getCount();
+  int32_t testEncoderValue = encoder.getCount();
   bool encoderButtonState = !digitalRead(ENCODER_BUTTON_PIN);
   
   // Mapper les faders sur 0-255 pour DMX 2, 3, 4 (inversés)
@@ -949,7 +967,7 @@ void testInputs() {
   Serial.print(" | B3 ");
   Serial.print(button3State ? "1" : "0");
   Serial.print(" | ENC ");
-  Serial.print(encoderValue);
+  Serial.print(testEncoderValue);
   Serial.print(" | ENCB ");
   Serial.print(encoderButtonState ? "1" : "0");
   Serial.print(" | DMX2 ");
@@ -960,9 +978,10 @@ void testInputs() {
   Serial.print(dmxValues[3]);
   Serial.println();
   
-  // Afficher le compteur sur le 4-digit display (aligné à droite)
-  display.clearScreen();
-  display.display(displayCounter);
+  // Afficher la valeur de l'encodeur sur le display
+  display.clear();
+  uint16_t displayValue = abs(testEncoderValue) % 10000; // Limiter à 4 chiffres
+  display.showNumberDec(displayValue);
   
   // Mettre à jour le LED strip avec les valeurs DMX 2, 3, 4
   uint8_t redValue = dmxValues[1];    // Canal DMX 2 (R)
@@ -1001,8 +1020,8 @@ void loop()
   // Lecture des faders
  // readFaders();
   
-  // Gestion des boutons PCF8574
-  //handleButtons();
+  // Gestion des boutons push
+  handleButtons();
   
   // Gestion de l'encodeur KY-040
  // handleEncoder();
