@@ -168,22 +168,22 @@ const unsigned long DISPLAY_UPDATE_INTERVAL = 100; // 100ms entre les mises à j
 // Variable pour le compteur d'affichage
 uint16_t displayCounter = 0;
 
-// Variables pour la stabilisation des capteurs IR - NOUVELLE STRATÉGIE
-#define IR_SAMPLE_SIZE 20  // Nombre d'échantillons pour la moyenne mobile
-#define IR_OUTLIER_THRESHOLD 100  // Seuil d'écart pour adapter les pics aberrants
+// Variables pour la stabilisation des capteurs IR - VERSION SIMPLIFIÉE
+#define IR_SAMPLE_SIZE 10        // Taille de la moyenne mobile (ajustable)
+#define IR_MAX_DEVIATION 50      // Limite des écarts autorisés (ajustable)
 
-int irRawValues1[IR_SAMPLE_SIZE];
-int irRawValues2[IR_SAMPLE_SIZE];
-int irSampleIndex1 = 0;
-int irSampleIndex2 = 0;
-int irSum1 = 0;
-int irSum2 = 0;
-bool irInitialized1 = false;
-bool irInitialized2 = false;
+int irBuffer1[IR_SAMPLE_SIZE];   // Buffer pour IR1
+int irBuffer2[IR_SAMPLE_SIZE];   // Buffer pour IR2
+int irIndex1 = 0;                // Index circulaire IR1
+int irIndex2 = 0;                // Index circulaire IR2
+int irSum1 = 0;                  // Somme IR1
+int irSum2 = 0;                  // Somme IR2
+bool irInitialized1 = false;     // Initialisation IR1
+bool irInitialized2 = false;     // Initialisation IR2
 
-// Fonction pour appliquer le filtre avec adaptation progressive des aberrants
-int applyOutlierFilter(int newValue, int* buffer, int& index, int& sum, bool& initialized) {
-  // Si pas encore initialisé, remplir le tableau avec la première valeur
+// Fonction pour stabiliser un capteur IR avec moyenne mobile et limitation d'aberrants
+int stabilizeIRSensor(int newValue, int* buffer, int& index, int& sum, bool& initialized) {
+  // Initialisation : remplir le buffer avec la première valeur
   if (!initialized) {
     for (int i = 0; i < IR_SAMPLE_SIZE; i++) {
       buffer[i] = newValue;
@@ -195,34 +195,34 @@ int applyOutlierFilter(int newValue, int* buffer, int& index, int& sum, bool& in
   // Calculer la moyenne actuelle
   int currentAverage = sum / IR_SAMPLE_SIZE;
   
-  // Vérifier si la nouvelle valeur est un aberrant
+  // Vérifier si la nouvelle valeur est aberrante
   int deviation = abs(newValue - currentAverage);
   
-  if (deviation > IR_OUTLIER_THRESHOLD) {
-    // Valeur aberrante détectée, l'adapter progressivement
-    int adaptedValue;
+  if (deviation > IR_MAX_DEVIATION) {
+    // Valeur aberrante : la limiter à moyenne ± seuil
+    int limitedValue;
     if (newValue > currentAverage) {
-      // Valeur au-dessus de la moyenne, limiter à moyenne + seuil
-      adaptedValue = currentAverage + IR_OUTLIER_THRESHOLD;
+      limitedValue = currentAverage + IR_MAX_DEVIATION;
     } else {
-      // Valeur en-dessous de la moyenne, limiter à moyenne - seuil
-      adaptedValue = currentAverage - IR_OUTLIER_THRESHOLD;
+      limitedValue = currentAverage - IR_MAX_DEVIATION;
     }
     
-    // Utiliser la valeur adaptée
+    // Mettre à jour le buffer avec la valeur limitée
     sum -= buffer[index];
-    buffer[index] = adaptedValue;
-    sum += adaptedValue;
-    index = (index + 1) % IR_SAMPLE_SIZE;
-    return sum / IR_SAMPLE_SIZE;
+    buffer[index] = limitedValue;
+    sum += limitedValue;
   } else {
-    // Valeur normale, l'ajouter au filtre
+    // Valeur normale : l'ajouter au buffer
     sum -= buffer[index];
     buffer[index] = newValue;
     sum += newValue;
-    index = (index + 1) % IR_SAMPLE_SIZE;
-    return sum / IR_SAMPLE_SIZE;
   }
+  
+  // Passer à l'index suivant (buffer circulaire)
+  index = (index + 1) % IR_SAMPLE_SIZE;
+  
+  // Retourner la moyenne
+  return sum / IR_SAMPLE_SIZE;
 }
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
@@ -390,38 +390,17 @@ void printAllPresets() {
   //Serial.println("===========================");
 }
 
-// Fonction pour calculer la moyenne d'un tableau
-int calculateAverage(int* values, int size) {
-  long sum = 0;
-  for (int i = 0; i < size; i++) {
-    sum += values[i];
-  }
-  return sum / size;
-}
 
-// Fonction pour appliquer un filtre passe-bas
-float applyLowPassFilter(float currentValue, float newValue, float alpha) {
-  return alpha * newValue + (1.0 - alpha) * currentValue;
-}
 
-// Fonction pour stabiliser une valeur avec debouncing
-int stabilizeValue(int newValue, int lastValue, int threshold) {
-  int difference = abs(newValue - lastValue);
-  if (difference <= threshold) {
-    return lastValue; // Ignorer les petites variations
-  }
-  return newValue;
-}
-
-// Fonction pour lire et stabiliser un capteur IR - NOUVELLE STRATÉGIE
-int readStabilizedIRSensor(int sensorPin, int* rawValues, int& sampleIndex, int& sum, bool& initialized) {
+// Fonction pour lire et stabiliser un capteur IR
+int readStabilizedIRSensor(int sensorPin, int* buffer, int& index, int& sum, bool& initialized) {
   // Lecture brute
   int rawValue = analogRead(sensorPin);
   
-  // Application du filtre avec adaptation progressive des aberrants
-  int filteredValue = applyOutlierFilter(rawValue, rawValues, sampleIndex, sum, initialized);
+  // Application du filtre de stabilisation
+  int stabilizedValue = stabilizeIRSensor(rawValue, buffer, index, sum, initialized);
   
-  return filteredValue;
+  return stabilizedValue;
 }
 
 // Fonction d'initialisation du rotary encoder (désactivée - encoder non câblé)
@@ -658,12 +637,12 @@ void initializeUserInterface() {
 // Fonction pour lire les capteurs Sharp IR avec stabilisation - NOUVELLE STRATÉGIE
 void readSharpIRSensors() {
   // Lecture stabilisée du premier capteur Sharp IR
-  int stabilizedValue1 = readStabilizedIRSensor(DIST_SENSOR_1_PIN, irRawValues1, irSampleIndex1, irSum1, irInitialized1);
+  int stabilizedValue1 = readStabilizedIRSensor(DIST_SENSOR_1_PIN, irBuffer1, irIndex1, irSum1, irInitialized1);
   uint8_t sharpIRValue1 = stabilizedValue1 / 16;
   setParameter("pitch", sharpIRValue1);
   
   // Lecture stabilisée du deuxième capteur Sharp IR
-  int stabilizedValue2 = readStabilizedIRSensor(DIST_SENSOR_2_PIN, irRawValues2, irSampleIndex2, irSum2, irInitialized2);
+  int stabilizedValue2 = readStabilizedIRSensor(DIST_SENSOR_2_PIN, irBuffer2, irIndex2, irSum2, irInitialized2);
   uint8_t sharpIRValue2 = stabilizedValue2 / 16;
   setParameter("vibrato_speed", sharpIRValue2);
   
@@ -735,58 +714,51 @@ void handleButtons() {
 
 // Fonction pour gérer l'encodeur KY-040
 void handleEncoder() {
-  int32_t currentEncoderValue = encoder.getCount();
+  int32_t currentEncoderValue = - encoder.getCount();
+  Serial.print("currentEncoderValue: ");
+  Serial.print(currentEncoderValue);
   
-  // Gestion de la rotation - changement de preset
-  if (currentEncoderValue != lastEncoderValue) {
-    int32_t delta = currentEncoderValue - lastEncoderValue;
+  // Calculer le preset selon la formule : |valeur_encoder / 2| % 10
+  // Utiliser la valeur absolue pour éviter les problèmes avec les grandes valeurs négatives
+  int32_t normalizedValue = abs(currentEncoderValue / 2);
+  uint8_t newPreset = normalizedValue % MAX_PRESETS;
+  Serial.print(" - newPreset: ");
+  Serial.println(newPreset);
+  
+  // Si le preset a changé
+  if (newPreset != selectedPreset) {
+    selectedPreset = newPreset;
     
-    // Afficher les valeurs brutes de l'encodeur
-    Serial.print("Encodeur - Brut: ");
-    Serial.print(currentEncoderValue);
-    Serial.print(" | Delta: ");
-    Serial.print(delta);
+    // Charger le preset sélectionné
+    loadPreset(selectedPreset);
     
-    // Utiliser le modulo 20 puis diviser par 2 pour gérer les 2 deltas par cran physique
-    int32_t moduloValue = (currentEncoderValue % 20) / 2;
-    int32_t lastModuloValue = (lastEncoderValue % 20) / 2;
-    
-    // Détecter la direction et changer de preset
-    if (moduloValue != lastModuloValue) {
-      // Changer de preset directement selon la valeur modulo
-      selectedPreset = moduloValue % 10;
-      
-      // Charger le preset sélectionné
-      loadPreset(selectedPreset);
-      
-      Serial.print(" | Modulo/2: ");
-      Serial.print(moduloValue);
-      Serial.print(" | Preset: ");
-      Serial.print(selectedPreset);
-      Serial.print(" - ");
-      Serial.println(presets[selectedPreset].name);
-    }
-    
-    lastEncoderValue = currentEncoderValue;
+    // Afficher le numéro du preset sur le display (aligné à droite)
+    display.clearScreen();
+    //display.display(selectedPreset,true,true,3);
+    display.display(selectedPreset);
+    /*
+    Serial.print("Preset changé: ");
+    Serial.print(selectedPreset);
+    Serial.print(" - ");
+    Serial.println(presets[selectedPreset].name);
+    */
   }
   
-  // Gestion du bouton de l'encodeur - toggle filtre on/off
-  bool buttonState = !digitalRead(ENCODER_BUTTON_PIN);
-  
-  if (buttonState && !encoderButtonPressed && (millis() - lastEncoderButtonPress > BUTTON_DEBOUNCE)) {
-    // Toggle du filtre on/off
+  // Gestion du bouton de l'encodeur (toggle filtre)
+  bool encoderButtonState = !digitalRead(ENCODER_BUTTON_PIN);
+  if (encoderButtonState && !encoderButtonPressed && (millis() - lastEncoderButtonPress > BUTTON_DEBOUNCE)) {
     uint8_t currentFilterState = getParameter("filter_on_off");
     uint8_t newFilterState = (currentFilterState == 0) ? 255 : 0;
     setParameter("filter_on_off", newFilterState);
     
-    Serial.print("Bouton encodeur - Filtre: ");
+    Serial.print("Filtre: ");
     Serial.println((newFilterState == 255) ? "ON" : "OFF");
     
     encoderButtonPressed = true;
     lastEncoderButtonPress = millis();
   }
   
-  if (!buttonState) {
+  if (!encoderButtonState) {
     encoderButtonPressed = false;
   }
 }
@@ -988,7 +960,8 @@ void testInputs() {
   Serial.print(dmxValues[3]);
   Serial.println();
   
-  // Afficher le compteur sur le 4-digit display
+  // Afficher le compteur sur le 4-digit display (aligné à droite)
+  display.clearScreen();
   display.display(displayCounter);
   
   // Mettre à jour le LED strip avec les valeurs DMX 2, 3, 4
@@ -1016,8 +989,14 @@ void loop()
   }
   else // fonctionnement normal
   {
-
- 
+    // Lecture stabilisée du capteur IR1 et mise à jour du paramètre pitch
+    int stabilizedIR1 = readStabilizedIRSensor(DIST_SENSOR_1_PIN, irBuffer1, irIndex1, irSum1, irInitialized1);
+    uint8_t irValue1 = stabilizedIR1 / 16; // 0-4095 → 0-255
+    setParameter("pitch", irValue1);
+    
+    // Gestion de l'encodeur rotatif
+    handleEncoder();
+  }
   
   // Lecture des faders
  // readFaders();
@@ -1039,6 +1018,4 @@ void loop()
   }
   
   delay(1); // Petit délai pour éviter de surcharger le CPU
-}
-
 }
