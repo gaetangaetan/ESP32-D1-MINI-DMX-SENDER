@@ -1,4 +1,3 @@
-
 #define VERSION 160
 /*
 // Contrôleur interactif ESP32 avec capteurs Sharp IR
@@ -43,7 +42,7 @@
 
 // Définitions pour le ruban WS2812B
 #define LED_STRIP_PIN 4    // GPIO4 - Signal DATA du WS2812B
-#define NUM_LEDS 8         // Nombre de LEDs dans le ruban (ajustable)
+#define NUM_LEDS 144         // Nombre de LEDs dans le ruban (ajustable)
 #define BRIGHTNESS 64      // Luminosité (0-255)
 
 // Configuration ESP-NOW
@@ -54,14 +53,14 @@
 #define MIN_DISTANCE_CM 4   // Distance minimale en cm pour Sharp IR
 
 // Configuration des presets
-#define PRESET_SIZE 37  // Nombre de paramètres par preset (37 au lieu de 24)
+#define PRESET_SIZE 40  // Nombre de paramètres par preset (40 au lieu de 38)
 #define MAX_PRESETS 10  // Nombre maximum de presets
 
 // Configuration des trigs
 #define TRIG_LENGTH 5   // Durée des trigs en nombre de paquets DMX
 
 // Configuration du dimmer RGB
-#define DIMMER_SPEED 0.01  // Vitesse de l'inertie du dimmer (0.0-1.0, plus petit = plus lent)
+#define DIMMER_SPEED 0.01 // Vitesse de l'inertie du dimmer (0.0-1.0, plus petit = plus lent)
 
 // Structure pour un paramètre
 typedef struct {
@@ -113,19 +112,22 @@ Parameter parameters[PRESET_SIZE] = {
   {"filter_type", 124, 0, 0},
   
   // Nouveaux paramètres (25-37)
-  {"ir2_target_param", 125, 3, 3},        // 1 - index du paramètre contrôlé par IR2 (3 = vibrato_depth)
-  {"fader1_target_param", 126, 2, 2},     // 2 - index du paramètre contrôlé par fader1 (2 = vibrato_speed)
-  {"fader2_target_param", 127, 4, 4},     // 3 - index du paramètre contrôlé par fader2 (4 = delay_time)
-  {"fader3_target_param", 128, 5, 5},     // 4 - index du paramètre contrôlé par fader3 (5 = delay_feedback)
-  {"button3_target_param", 129, 18, 18},  // 5 - index du paramètre contrôlé par bouton3 (18 = trig_hh)
-  {"button3_released_value", 130, 0, 0},  // 6 - valeur quand bouton3 est relevé
-  {"button3_pressed_value", 131, 5, 5},   // 7 - valeur quand bouton3 est pressé
-  {"rgb1_red", 132, 255, 255},            // 8 - première valeur RGB (rouge)
-  {"rgb1_green", 133, 0, 0},              // 9 - première valeur RGB (vert)
-  {"rgb1_blue", 134, 0, 0},               // 10 - première valeur RGB (bleu)
-  {"rgb2_red", 135, 0, 0},                // 11 - deuxième valeur RGB (rouge)
-  {"rgb2_green", 136, 255, 255},          // 12 - deuxième valeur RGB (vert)
-  {"rgb2_blue", 137, 0, 0}                // 13 - deuxième valeur RGB (bleu)
+  {"ir1_target_param", 125, 1, 1},        // 1 - index du paramètre contrôlé par IR1 (1 = pitch)
+  {"ir2_target_param", 126, 3, 3},        // 2 - index du paramètre contrôlé par IR2 (3 = vibrato_depth)
+  {"fader1_target_param", 127, 2, 2},     // 3 - index du paramètre contrôlé par fader1 (2 = vibrato_speed)
+  {"fader2_target_param", 128, 4, 4},     // 4 - index du paramètre contrôlé par fader2 (4 = delay_time)
+  {"fader3_target_param", 129, 5, 5},     // 5 - index du paramètre contrôlé par fader3 (5 = delay_feedback)
+  {"button3_target_param", 130, 18, 18},  // 6 - index du paramètre contrôlé par bouton3 (18 = trig_hh)
+  {"button3_released_value", 131, 0, 0},  // 7 - valeur quand bouton3 est relevé
+  {"button3_pressed_value", 132, 5, 5},   // 8 - valeur quand bouton3 est pressé
+  {"rgb1_red", 133, 255, 255},            // 9 - première valeur RGB (rouge)
+  {"rgb1_green", 134, 0, 0},              // 10 - première valeur RGB (vert)
+  {"rgb1_blue", 135, 0, 0},               // 11 - première valeur RGB (bleu)
+  {"rgb2_red", 136, 0, 0},                // 12 - deuxième valeur RGB (rouge)
+  {"rgb2_green", 137, 255, 255},          // 13 - deuxième valeur RGB (vert)
+  {"rgb2_blue", 138, 0, 0},               // 14 - deuxième valeur RGB (bleu)
+  {"dimmer1_source", 139, 0, 0},          // 15 - source du dimmer1 (0=IR1, 1=IR2, 2=Fader1, 3=Fader2, 4=Fader3)
+  {"dimmer2_source", 140, 1, 1}           // 16 - source du dimmer2 (0=IR1, 1=IR2, 2=Fader1, 3=Fader2, 4=Fader3)
 };
 
 // Tableau des presets
@@ -318,31 +320,10 @@ uint8_t getParameter(const char* paramName) {
 }
 
 // Variables globales pour stocker les liens des contrôles physiques
-uint8_t ir2TargetParam = 3;      // Par défaut, IR2 contrôle vibrato_depth (paramètre 3)
-uint8_t fader1TargetParam = 2;   // Par défaut, fader1 contrôle vibrato_speed (paramètre 2)
-uint8_t fader2TargetParam = 4;   // Par défaut, fader2 contrôle delay_time (paramètre 4)
-uint8_t fader3TargetParam = 5;   // Par défaut, fader3 contrôle delay_feedback (paramètre 5)
-uint8_t button3TargetParam = 18; // Par défaut, bouton3 contrôle trig_hh (paramètre 18)
+// REMOVED: Les liens sont maintenant lus dynamiquement depuis le preset actuel
 
 // Fonction pour mettre à jour les liens des contrôles physiques depuis le preset actuel
-void updatePhysicalControlLinks() {
-  ir2TargetParam = getParameter("ir2_target_param");
-  fader1TargetParam = getParameter("fader1_target_param");
-  fader2TargetParam = getParameter("fader2_target_param");
-  fader3TargetParam = getParameter("fader3_target_param");
-  button3TargetParam = getParameter("button3_target_param");
-  
-  Serial.print("Liens mis à jour - IR2:");
-  Serial.print(ir2TargetParam);
-  Serial.print(" F1:");
-  Serial.print(fader1TargetParam);
-  Serial.print(" F2:");
-  Serial.print(fader2TargetParam);
-  Serial.print(" F3:");
-  Serial.print(fader3TargetParam);
-  Serial.print(" B3:");
-  Serial.println(button3TargetParam);
-}
+// REMOVED: Plus nécessaire car les liens sont lus à chaque appel
 
 // Fonction pour sauvegarder un preset
 void savePreset(uint8_t presetIndex, const char* presetName) {
@@ -376,8 +357,7 @@ void loadPreset(uint8_t presetIndex) {
     dmxValues[parameters[i].dmxChannel - 1] = parameters[i].value;
   }
   
-  // Mettre à jour les liens des contrôles physiques
-  updatePhysicalControlLinks();
+  // Les liens des contrôles physiques sont maintenant lus dynamiquement à chaque appel
   
   Serial.println("Preset " + String(presetIndex) + " chargé: " + String(presets[presetIndex].name));
 }
@@ -402,7 +382,7 @@ void initializeParameters() {
 
 
 
-// Fonction pour enregistrer tous les paramètres d'un coup (37 arguments)
+// Fonction pour enregistrer tous les paramètres d'un coup (40 arguments)
 void setAllParameters(uint8_t autopan_depth, uint8_t pitch, uint8_t vibrato_speed, uint8_t vibrato_depth,
                      uint8_t delay_time, uint8_t delay_feedback, uint8_t osc_waveform, uint8_t gate_threshold,
                      uint8_t portamento_time, uint8_t scale, uint8_t octave_low_high, uint8_t osc2_volume,
@@ -411,10 +391,11 @@ void setAllParameters(uint8_t autopan_depth, uint8_t pitch, uint8_t vibrato_spee
                      uint8_t master_volume, uint8_t filter_on_off, uint8_t filter_cutoff,
                      uint8_t filter_reso, uint8_t filter_type,
                      // Nouveaux paramètres
-                     uint8_t ir2_target_param, uint8_t fader1_target_param, uint8_t fader2_target_param, uint8_t fader3_target_param,
+                     uint8_t ir1_target_param, uint8_t ir2_target_param, uint8_t fader1_target_param, uint8_t fader2_target_param, uint8_t fader3_target_param,
                      uint8_t button3_target_param, uint8_t button3_released_value, uint8_t button3_pressed_value,
                      uint8_t rgb1_red, uint8_t rgb1_green, uint8_t rgb1_blue,
-                     uint8_t rgb2_red, uint8_t rgb2_green, uint8_t rgb2_blue) {
+                     uint8_t rgb2_red, uint8_t rgb2_green, uint8_t rgb2_blue,
+                     uint8_t dimmer1_source, uint8_t dimmer2_source) {
   
   // Mettre à jour tous les paramètres existants (0-23)
   parameters[0].value = autopan_depth;
@@ -442,20 +423,23 @@ void setAllParameters(uint8_t autopan_depth, uint8_t pitch, uint8_t vibrato_spee
   parameters[22].value = filter_reso;
   parameters[23].value = filter_type;
   
-  // Mettre à jour les nouveaux paramètres (24-36)
-  parameters[24].value = ir2_target_param;
-  parameters[25].value = fader1_target_param;
-  parameters[26].value = fader2_target_param;
-  parameters[27].value = fader3_target_param;
-  parameters[28].value = button3_target_param;
-  parameters[29].value = button3_released_value;
-  parameters[30].value = button3_pressed_value;
-  parameters[31].value = rgb1_red;
-  parameters[32].value = rgb1_green;
-  parameters[33].value = rgb1_blue;
-  parameters[34].value = rgb2_red;
-  parameters[35].value = rgb2_green;
-  parameters[36].value = rgb2_blue;
+  // Mettre à jour les nouveaux paramètres (24-39)
+  parameters[24].value = ir1_target_param;
+  parameters[25].value = ir2_target_param;
+  parameters[26].value = fader1_target_param;
+  parameters[27].value = fader2_target_param;
+  parameters[28].value = fader3_target_param;
+  parameters[29].value = button3_target_param;
+  parameters[30].value = button3_released_value;
+  parameters[31].value = button3_pressed_value;
+  parameters[32].value = rgb1_red;
+  parameters[33].value = rgb1_green;
+  parameters[34].value = rgb1_blue;
+  parameters[35].value = rgb2_red;
+  parameters[36].value = rgb2_green;
+  parameters[37].value = rgb2_blue;
+  parameters[38].value = dimmer1_source;
+  parameters[39].value = dimmer2_source;
   
   // Mettre à jour le tableau DMX
   for (int i = 0; i < PRESET_SIZE; i++) {
@@ -489,6 +473,45 @@ int readStabilizedIRSensor(int sensorPin, int* buffer, int& index, int& sum, boo
   return stabilizedValue;
 }
 
+// Fonction pour mapping amélioré d'IR1 (pitch)
+uint8_t mapIR1Logarithmic(int rawValue) {
+  // Normaliser la valeur d'entrée (0-4095 → 0.0-1.0)
+  float normalized = (float)rawValue / 4095.0;
+  
+  // Mapping exponentiel inverse pour plus de contrôle dans les petites distances
+  // x^0.3 donne une courbe qui monte rapidement au début puis se stabilise
+  float expMapped = pow(normalized, 0.3);
+  
+  // Convertir en 0-255
+  uint8_t result = (uint8_t)(expMapped * 255.0);
+  
+  return result;
+}
+
+// Fonction pour mapping linéaire d'IR1 (dimmer)
+uint8_t mapIR1Linear(int rawValue) {
+  // Mapping linéaire simple pour les dimmers
+  return rawValue / 16; // 0-4095 → 0-255
+}
+
+// Fonction pour lire la valeur d'un contrôle assigné (0-4)
+uint8_t getControlValue(uint8_t source) {
+  switch(source) {
+    case 0: // IR1 (mapping linéaire pour dimmer)
+      return mapIR1Linear(readStabilizedIRSensor(DIST_SENSOR_1_PIN, irBuffer1, irIndex1, irSum1, irInitialized1));
+    case 1: // IR2
+      return readStabilizedIRSensor(DIST_SENSOR_2_PIN, irBuffer2, irIndex2, irSum2, irInitialized2) / 16;
+    case 2: // Fader1 (inversé)
+      return (4095 - analogRead(FADER_1_PIN)) / 16;
+    case 3: // Fader2 (inversé)
+      return (4095 - analogRead(FADER_2_PIN)) / 16;
+    case 4: // Fader3 (inversé)
+      return (4095 - analogRead(FADER_3_PIN)) / 16;
+    default:
+      return 0;
+  }
+}
+
 // Fonction pour mettre à jour le dimmer RGB avec inertie
 void updateRGBWithDimmer() {
   // Lecture des valeurs RGB depuis les paramètres
@@ -499,15 +522,18 @@ void updateRGBWithDimmer() {
   uint8_t rgb2Green = getParameter("rgb2_green");
   uint8_t rgb2Blue = getParameter("rgb2_blue");
   
-  // Lecture des capteurs IR pour le dimmer
-  int stabilizedIR1 = readStabilizedIRSensor(DIST_SENSOR_1_PIN, irBuffer1, irIndex1, irSum1, irInitialized1);
-  int stabilizedIR2 = readStabilizedIRSensor(DIST_SENSOR_2_PIN, irBuffer2, irIndex2, irSum2, irInitialized2);
+  // Lecture des sources des dimmers depuis les paramètres
+  uint8_t dimmer1Source = getParameter("dimmer1_source");
+  uint8_t dimmer2Source = getParameter("dimmer2_source");
   
-  // Conversion en valeurs de dimmer avec mapping 50-255 → 0-255
-  float rawDimmer1 = (float)stabilizedIR1 / 4095.0; // IR1 pour LED strip
-  float rawDimmer2 = (float)stabilizedIR2 / 4095.0; // IR2 pour DMX RGB
+  // Lecture des valeurs des contrôles assignés
+  uint8_t control1Value = getControlValue(dimmer1Source);
+  uint8_t control2Value = getControlValue(dimmer2Source);
   
   // Mapping 50-255 → 0-255 (en dessous de 50 = éteint)
+  float rawDimmer1 = (float)control1Value / 255.0;
+  float rawDimmer2 = (float)control2Value / 255.0;
+  
   float targetDimmer1 = (rawDimmer1 < 0.196) ? 0.0 : (rawDimmer1 - 0.196) / (1.0 - 0.196); // 50/255 ≈ 0.196
   float targetDimmer2 = (rawDimmer2 < 0.196) ? 0.0 : (rawDimmer2 - 0.196) / (1.0 - 0.196);
   
@@ -515,42 +541,45 @@ void updateRGBWithDimmer() {
   dimmerValue1 += (targetDimmer1 - dimmerValue1) * DIMMER_SPEED;
   dimmerValue2 += (targetDimmer2 - dimmerValue2) * DIMMER_SPEED;
   
-  // Calcul des valeurs RGB dimmées (IR1 → LED strip, IR2 → DMX RGB)
-  rgb1RedDimmed = (uint8_t)(rgb1Red * dimmerValue2); // IR2 contrôle DMX RGB
+  // Calcul des valeurs RGB dimmées
+  rgb1RedDimmed = (uint8_t)(rgb1Red * dimmerValue2); // Dimmer2 contrôle DMX RGB
   rgb1GreenDimmed = (uint8_t)(rgb1Green * dimmerValue2);
   rgb1BlueDimmed = (uint8_t)(rgb1Blue * dimmerValue2);
   
-  rgb2RedDimmed = (uint8_t)(rgb2Red * dimmerValue1); // IR1 contrôle LED strip
+  rgb2RedDimmed = (uint8_t)(rgb2Red * dimmerValue1); // Dimmer1 contrôle LED strip
   rgb2GreenDimmed = (uint8_t)(rgb2Green * dimmerValue1);
   rgb2BlueDimmed = (uint8_t)(rgb2Blue * dimmerValue1);
   
   // Debug (optionnel)
   static unsigned long lastDimmerDebugTime = 0;
   if (millis() - lastDimmerDebugTime > 2000) { // Debug toutes les 2 secondes
-    Serial.print("Dimmer - IR1(LED):");
+    Serial.print("Dimmer - S1:");
+    Serial.print(dimmer1Source);
+    Serial.print(" S2:");
+    Serial.print(dimmer2Source);
+    Serial.print(" V1:");
+    Serial.print(control1Value);
+    Serial.print(" V2:");
+    Serial.print(control2Value);
+    Serial.print(" D1:");
     Serial.print(dimmerValue1, 2);
-    Serial.print(" IR2(DMX):");
+    Serial.print(" D2:");
     Serial.print(dimmerValue2, 2);
-    Serial.print(" DMX_RGB:");
-    Serial.print(rgb1RedDimmed);
-    Serial.print(",");
-    Serial.print(rgb1GreenDimmed);
-    Serial.print(",");
-    Serial.print(rgb1BlueDimmed);
-    Serial.print(" LED_RGB:");
-    Serial.print(rgb2RedDimmed);
-    Serial.print(",");
-    Serial.print(rgb2GreenDimmed);
-    Serial.print(",");
-    Serial.println(rgb2BlueDimmed);
+    Serial.println();
     lastDimmerDebugTime = millis();
   }
 }
 
+
+
 // Fonction pour contrôler les paramètres via les entrées physiques
+// Les liens des contrôles sont maintenant lus dynamiquement depuis le preset actuel
+// Si un paramètre de lien vaut 0, le contrôle correspondant est désactivé
 void handlePhysicalControls() {
-  // Lecture stabilisée du capteur IR2
+  // Lecture stabilisée des capteurs IR
+  int stabilizedIR1 = readStabilizedIRSensor(DIST_SENSOR_1_PIN, irBuffer1, irIndex1, irSum1, irInitialized1);
   int stabilizedIR2 = readStabilizedIRSensor(DIST_SENSOR_2_PIN, irBuffer2, irIndex2, irSum2, irInitialized2);
+  uint8_t ir1Value = mapIR1Logarithmic(stabilizedIR1); // Mapping amélioré pour IR1
   uint8_t ir2Value = stabilizedIR2 / 16; // 0-4095 → 0-255
   
   // Lecture des faders (inversés : 4095-0 → 0-255)
@@ -561,25 +590,48 @@ void handlePhysicalControls() {
   // Lecture du bouton 3
   bool button3State = !digitalRead(BUTTON_3_PIN);
   
+  // Lire les liens des contrôles directement depuis le preset actuel
+  uint8_t ir1TargetParam = getParameter("ir1_target_param");
+  uint8_t ir2TargetParam = getParameter("ir2_target_param");
+  uint8_t fader1TargetParam = getParameter("fader1_target_param");
+  uint8_t fader2TargetParam = getParameter("fader2_target_param");
+  uint8_t fader3TargetParam = getParameter("fader3_target_param");
+  uint8_t button3TargetParam = getParameter("button3_target_param");
+  
   // Appliquer les valeurs aux paramètres cibles selon les liens du preset
-  if (ir2TargetParam < PRESET_SIZE) {
+  if (ir1TargetParam > 0 && ir1TargetParam < PRESET_SIZE) {
+    setParameter(parameters[ir1TargetParam].name, ir1Value);
+  }
+  
+  if (ir2TargetParam > 0 && ir2TargetParam < PRESET_SIZE) {
     setParameter(parameters[ir2TargetParam].name, ir2Value);
   }
   
-  if (fader1TargetParam < PRESET_SIZE) {
-    setParameter(parameters[fader1TargetParam].name, fader1Value);
-  }
+  // Gestion conditionnelle des faders selon l'état du filtre
+  uint8_t filterState = getParameter("filter_on_off");
   
-  if (fader2TargetParam < PRESET_SIZE) {
-    setParameter(parameters[fader2TargetParam].name, fader2Value);
-  }
-  
-  if (fader3TargetParam < PRESET_SIZE) {
-    setParameter(parameters[fader3TargetParam].name, fader3Value);
+  if (filterState == 0) {
+    // Filter OFF : fader1 → vibrato_speed, fader2 → delay_time, fader3 → delay_feedback
+    setParameter("vibrato_speed", fader1Value);   // Paramètre 3
+    setParameter("delay_time", fader2Value);      // Paramètre 5
+    setParameter("delay_feedback", fader3Value);  // Paramètre 6
+  } else {
+    // Filter ON : utiliser les assignations du preset
+    if (fader1TargetParam > 0 && fader1TargetParam < PRESET_SIZE) {
+      setParameter(parameters[fader1TargetParam].name, fader1Value);
+    }
+    
+    if (fader2TargetParam > 0 && fader2TargetParam < PRESET_SIZE) {
+      setParameter(parameters[fader2TargetParam].name, fader2Value);
+    }
+    
+    if (fader3TargetParam > 0 && fader3TargetParam < PRESET_SIZE) {
+      setParameter(parameters[fader3TargetParam].name, fader3Value);
+    }
   }
   
   // Gestion du bouton 3 avec valeurs released/pressed
-  if (button3TargetParam < PRESET_SIZE) {
+  if (button3TargetParam > 0 && button3TargetParam < PRESET_SIZE) {
     uint8_t button3ReleasedValue = getParameter("button3_released_value");
     uint8_t button3PressedValue = getParameter("button3_pressed_value");
     uint8_t button3TargetValue = button3State ? button3PressedValue : button3ReleasedValue;
@@ -592,7 +644,9 @@ void handlePhysicalControls() {
   // Debug (optionnel)
   static unsigned long lastDebugTime = 0;
   if (millis() - lastDebugTime > 1000) { // Debug toutes les secondes
-    Serial.print("Contrôles - IR2:");
+    Serial.print("Contrôles - IR1:");
+    Serial.print(ir1Value);
+    Serial.print(" IR2:");
     Serial.print(ir2Value);
     Serial.print(" F1:");
     Serial.print(fader1Value);
@@ -763,56 +817,80 @@ void handleEncoder() {
 */
 // Fonction d'initialisation des presets
 void initializePresets() {
+
+/*
+Targets : (0=IR1, 1=IR2, 2=Fader1, 3=Fader2, 4=Fader3)
+
+1  = autopan_depth           11 = octave_low_high          21 = filter_on_off            31 = button3_released_value
+2  = pitch                   12 = osc2_volume              22 = filter_cutoff            32 = button3_pressed_value
+3  = vibrato_speed           13 = osc2_pitch_offset        23 = filter_reso              33 = rgb1_red
+4  = vibrato_depth           14 = autopan_frequency        24 = filter_type              34 = rgb1_green
+5  = delay_time              15 = scale_tonic              25 = ir1_target_param         35 = rgb1_blue
+6  = delay_feedback          16 = volume_drums             26 = ir2_target_param         36 = rgb2_red
+7  = osc_waveform            17 = trig_kick                27 = fader1_target_param      37 = rgb2_green
+8  = gate_threshold          18 = trig_snare               28 = fader2_target_param      38 = rgb2_blue
+9  = portamento_time         19 = trig_hh                  29 = fader3_target_param      39 = dimmer1_source
+10 = scale                   20 = master_volume            30 = button3_target_param     40 = dimmer2_source
+*/
   Serial.println("Initialisation des presets...");
+
   
-  // Preset 0 - Simple sans effet
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37
-  setAllParameters(  0,  0, 64, 10,  0,  0,100,  0, 75,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0);
-  savePreset(0, "Simple");
+  // Preset 5 - Furious octaver growl feedbacker
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  setAllParameters(  0,150,221, 10, 74,241,255,  0, 91,255,  0,255,196,  0,  0,255,  0,  0,  0, 50,  0,  0,  0,  0, 12,  3, 21, 22, 6, 18,  0,  5,255,  0,  0,  0,255,  0,  0,  1);
+  savePreset(5, "FuriousGrowl");
+
+
+    // Preset 0 - Classical
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  setAllParameters(  0,  0, 59, 16, 74, 83,255, 155,213,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3,  2,  5,  6, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
+  savePreset(0, "Classical");
+
+    // Preset 7 - À définir
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  120, 75, 50,  0,150, 150,  0, 0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3, 21, 22, 23, 18,  0,  5,  0,255, 15,200,10, 255, 0,  0);
+  savePreset(7, "Preset7");
+
+    // Preset 6 - À définir
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  75,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3, 21, 22, 23, 18,  0,  5,255,  0, 50,  0,255, 255, 0,  0);
+  savePreset(6, "Preset6");
+
+  // Preset 4 - Simple sans effet
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  setAllParameters(  0,  0, 64, 10,  0,  0,100,  80, 75,  0,  0,  0,  0,  0,  0,255,  0,  0,  0, 0,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0,  0,  1);
+  savePreset(4, "Simple");
   
   // Preset 1 - Simple avec effet
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37
-  setAllParameters(  0,  0,  0,  0,130,110,100,  0, 30,  0,255,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,255,  0,  0);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  setAllParameters(  0,  0,  0,  0,130,110,100, 100, 30,  0,255,  0,  0,  0,  0,255,  0,  0,  0, 0,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,255,  0,  0,  0,  1);
   savePreset(1, "Simple+Effet");
   
   // Preset 2 - Octaver and growl
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37
-  setAllParameters(  0,  0, 64, 10, 90,110,145,  0, 75,255,  0,255,140,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,255);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  setAllParameters(  0,  0, 64, 10, 90,110,145,  0, 75,255,  0,255,140,  0,  0,255,  0,  0,  0, 0,  0,  0,  0,  0,  1,  3,  21, 22, 23, 18,  0,  5,255,255,  50,  0,255,255,  0,  1);
   savePreset(2, "OctaverGrowl");
   
   // Preset 3 - Modern siren vibrafrenzy
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37
-  setAllParameters(  0,  0,162,129,140,167,205,  0,108,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,255,  0, 50);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  setAllParameters(  0,  0,162,129,140,167,205,  0,108,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,255,  0, 50,  0,  1);
   savePreset(3, "ModernSiren");
   
-  // Preset 4 - Classical
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37
-  setAllParameters(  0,  0, 59, 16, 74, 83,255,  0,213,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0);
-  savePreset(4, "Classical");
+
   
-  // Preset 5 - Furious octaver growl feedbacker
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37
-  setAllParameters(  0,  0,221, 10, 74,241,255,  0, 91,255,  0,255,196,  0,  0,255,  0,  0,  0, 50,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0);
-  savePreset(5, "FuriousGrowl");
   
-  // Preset 6 - À définir
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37
-  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0);
-  savePreset(6, "Preset6");
+
   
-  // Preset 7 - À définir
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37
-  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0);
-  savePreset(7, "Preset7");
+
   
   // Preset 8 - À définir
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37
-  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0,  0,  1);
   savePreset(8, "Preset8");
   
   // Preset 9 - À définir
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37
-  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0);
+  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0,  0,  1);
   savePreset(9, "Preset9");
   
   Serial.println("Presets initialisés");
@@ -1022,7 +1100,7 @@ void handleEncoder() {
     uint8_t newFilterState = (currentFilterState == 0) ? 255 : 0;
     setParameter("filter_on_off", newFilterState);
     
-    // Afficher l'état du filtre sur le display
+    // Afficher l'état du filtre sur le display pendant 2 secondes
     display.clear();
     if (newFilterState == 255) {
       display.showNumberDec(9999); // Afficher "9999" pour indiquer FILTRE ON
@@ -1032,6 +1110,11 @@ void handleEncoder() {
     
     Serial.print("Filtre: ");
     Serial.println((newFilterState == 255) ? "ON" : "OFF");
+    
+    // Attendre 200ms puis revenir à l'affichage du preset
+    delay(200);
+    display.clear();
+    display.showNumberDec(selectedPreset);
     
     encoderButtonPressed = true;
     lastEncoderButtonPress = millis();
@@ -1261,12 +1344,7 @@ void loop()
   }
   else // fonctionnement normal
   {
-    // Lecture stabilisée du capteur IR1 et mise à jour du paramètre pitch
-    int stabilizedIR1 = readStabilizedIRSensor(DIST_SENSOR_1_PIN, irBuffer1, irIndex1, irSum1, irInitialized1);
-    uint8_t irValue1 = stabilizedIR1 / 16; // 0-4095 → 0-255
-    setParameter("pitch", irValue1);
-    
-    // Gestion des contrôles physiques dynamiques (IR2, faders, bouton3)
+    // Gestion des contrôles physiques dynamiques (IR1, IR2, faders, bouton3)
     handlePhysicalControls();
     
     // Gestion de l'encodeur rotatif

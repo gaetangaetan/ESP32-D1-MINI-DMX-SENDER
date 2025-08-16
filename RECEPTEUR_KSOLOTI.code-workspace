@@ -4,8 +4,11 @@
 			"path": "../RECEPTEUR_KSOLOTI"
 		},
 		{
-			"name": "ESP32 D1 MINI DMX SENDER",
 			"path": "."
+		},
+		{
+			"name": "tests_ESP32D1",
+			"path": "../tests_ESP32D1"
 		}
 	],
 	"settings": {}
