@@ -383,19 +383,48 @@ void initializeParameters() {
 
 
 // Fonction pour enregistrer tous les paramètres d'un coup (40 arguments)
-void setAllParameters(uint8_t autopan_depth, uint8_t pitch, uint8_t vibrato_speed, uint8_t vibrato_depth,
-                     uint8_t delay_time, uint8_t delay_feedback, uint8_t osc_waveform, uint8_t gate_threshold,
-                     uint8_t portamento_time, uint8_t scale, uint8_t octave_low_high, uint8_t osc2_volume,
-                     uint8_t osc2_pitch_offset, uint8_t autopan_frequency, uint8_t scale_tonic,
-                     uint8_t volume_drums, uint8_t trig_kick, uint8_t trig_snare, uint8_t trig_hh,
-                     uint8_t master_volume, uint8_t filter_on_off, uint8_t filter_cutoff,
-                     uint8_t filter_reso, uint8_t filter_type,
+void setAllParameters(
+uint8_t autopan_depth,   // 0
+uint8_t pitch,          // 1
+uint8_t vibrato_speed,  // 2
+uint8_t vibrato_depth,  // 3  
+uint8_t delay_time,     // 4
+uint8_t delay_feedback, // 5
+uint8_t osc_waveform,  // 6
+uint8_t gate_threshold, // 7
+uint8_t portamento_time, // 8
+uint8_t scale,          // 9
+uint8_t octave_low_high, // 10
+uint8_t osc2_volume,    // 11
+uint8_t osc2_pitch_offset, // 12
+uint8_t autopan_frequency, // 13
+uint8_t scale_tonic, // 14
+uint8_t volume_drums, // 15
+uint8_t trig_kick, // 16
+uint8_t trig_snare, // 17
+uint8_t trig_hh, // 18
+uint8_t master_volume, // 19
+uint8_t filter_on_off, // 20
+uint8_t filter_cutoff, // 21
+uint8_t filter_reso, // 22
+uint8_t filter_type, // 23
                      // Nouveaux paramètres
-                     uint8_t ir1_target_param, uint8_t ir2_target_param, uint8_t fader1_target_param, uint8_t fader2_target_param, uint8_t fader3_target_param,
-                     uint8_t button3_target_param, uint8_t button3_released_value, uint8_t button3_pressed_value,
-                     uint8_t rgb1_red, uint8_t rgb1_green, uint8_t rgb1_blue,
-                     uint8_t rgb2_red, uint8_t rgb2_green, uint8_t rgb2_blue,
-                     uint8_t dimmer1_source, uint8_t dimmer2_source) {
+uint8_t ir1_target_param, // 24
+uint8_t ir2_target_param, // 25
+uint8_t fader1_target_param, // 26
+uint8_t fader2_target_param, // 27
+uint8_t fader3_target_param, // 28
+uint8_t button3_target_param, // 29
+uint8_t button3_released_value, // 30
+uint8_t button3_pressed_value, // 31
+uint8_t rgb1_red, // 32
+uint8_t rgb1_green, // 33
+uint8_t rgb1_blue, // 34
+uint8_t rgb2_red, // 35
+uint8_t rgb2_green, // 36
+uint8_t rgb2_blue, // 37
+uint8_t dimmer1_source, // 38
+uint8_t dimmer2_source) { // 39
   
   // Mettre à jour tous les paramètres existants (0-23)
   parameters[0].value = autopan_depth;
@@ -599,36 +628,49 @@ void handlePhysicalControls() {
   uint8_t button3TargetParam = getParameter("button3_target_param");
   
   // Appliquer les valeurs aux paramètres cibles selon les liens du preset
-  if (ir1TargetParam > 0 && ir1TargetParam < PRESET_SIZE) {
+  if (ir1TargetParam >= 0 && ir1TargetParam < PRESET_SIZE) {
     setParameter(parameters[ir1TargetParam].name, ir1Value);
   }
   
-  if (ir2TargetParam > 0 && ir2TargetParam < PRESET_SIZE) {
+  if (ir2TargetParam >= 0 && ir2TargetParam < PRESET_SIZE) {
     setParameter(parameters[ir2TargetParam].name, ir2Value);
   }
   
-  // Gestion conditionnelle des faders selon l'état du filtre
-  uint8_t filterState = getParameter("filter_on_off");
-  
-  if (filterState == 0) {
-    // Filter OFF : fader1 → vibrato_speed, fader2 → delay_time, fader3 → delay_feedback
-    setParameter("vibrato_speed", fader1Value);   // Paramètre 3
-    setParameter("delay_time", fader2Value);      // Paramètre 5
-    setParameter("delay_feedback", fader3Value);  // Paramètre 6
-  } else {
-    // Filter ON : utiliser les assignations du preset
-    if (fader1TargetParam > 0 && fader1TargetParam < PRESET_SIZE) {
+      if (fader1TargetParam >= 0 && fader1TargetParam < PRESET_SIZE) {
       setParameter(parameters[fader1TargetParam].name, fader1Value);
     }
     
-    if (fader2TargetParam > 0 && fader2TargetParam < PRESET_SIZE) {
+    if (fader2TargetParam >= 0 && fader2TargetParam < PRESET_SIZE) {
       setParameter(parameters[fader2TargetParam].name, fader2Value);
     }
     
-    if (fader3TargetParam > 0 && fader3TargetParam < PRESET_SIZE) {
+    if (fader3TargetParam >= 0 && fader3TargetParam < PRESET_SIZE) {
       setParameter(parameters[fader3TargetParam].name, fader3Value);
     }
-  }
+
+
+  // Gestion conditionnelle des faders selon l'état du filtre
+  //uint8_t filterState = getParameter("filter_on_off"); 
+
+  // if (filterState == 0) {
+  //   // Filter OFF : fader1 → vibrato_speed, fader2 → delay_time, fader3 → delay_feedback
+  //   setParameter("vibrato_speed", fader1Value);   // Paramètre 3
+  //   setParameter("delay_time", fader2Value);      // Paramètre 5
+  //   setParameter("delay_feedback", fader3Value);  // Paramètre 6
+  // } else {
+  //   // Filter ON : utiliser les assignations du preset
+  //   if (fader1TargetParam >= 0 && fader1TargetParam < PRESET_SIZE) {
+  //     setParameter(parameters[fader1TargetParam].name, fader1Value);
+  //   }
+    
+  //   if (fader2TargetParam >= 0 && fader2TargetParam < PRESET_SIZE) {
+  //     setParameter(parameters[fader2TargetParam].name, fader2Value);
+  //   }
+    
+  //   if (fader3TargetParam >= 0 && fader3TargetParam < PRESET_SIZE) {
+  //     setParameter(parameters[fader3TargetParam].name, fader3Value);
+  //   }
+  // }
   
   // Gestion du bouton 3 avec valeurs released/pressed
   if (button3TargetParam > 0 && button3TargetParam < PRESET_SIZE) {
@@ -821,75 +863,91 @@ void initializePresets() {
 /*
 Targets : (0=IR1, 1=IR2, 2=Fader1, 3=Fader2, 4=Fader3)
 
-1  = autopan_depth           11 = octave_low_high          21 = filter_on_off            31 = button3_released_value
-2  = pitch                   12 = osc2_volume              22 = filter_cutoff            32 = button3_pressed_value
-3  = vibrato_speed           13 = osc2_pitch_offset        23 = filter_reso              33 = rgb1_red
-4  = vibrato_depth           14 = autopan_frequency        24 = filter_type              34 = rgb1_green
-5  = delay_time              15 = scale_tonic              25 = ir1_target_param         35 = rgb1_blue
-6  = delay_feedback          16 = volume_drums             26 = ir2_target_param         36 = rgb2_red
-7  = osc_waveform            17 = trig_kick                27 = fader1_target_param      37 = rgb2_green
-8  = gate_threshold          18 = trig_snare               28 = fader2_target_param      38 = rgb2_blue
-9  = portamento_time         19 = trig_hh                  29 = fader3_target_param      39 = dimmer1_source
-10 = scale                   20 = master_volume            30 = button3_target_param     40 = dimmer2_source
+0  = autopan_depth           10  = octave_low_high         20 = filter_on_off            30 = button3_released_value
+1  = pitch                   11 = osc2_volume              21 = filter_cutoff            31 = button3_pressed_value
+2  = vibrato_speed           12 = osc2_pitch_offset        22 = filter_reso              32 = rgb1_red
+3  = vibrato_depth           13 = autopan_frequency        23 = filter_type              33 = rgb1_green
+4  = delay_time              14 = scale_tonic              24 = ir1_target_param         34 = rgb1_blue
+5  = delay_feedback          15 = volume_drums             25 = ir2_target_param         35 = rgb2_red
+6  = osc_waveform            16 = trig_kick                26 = fader1_target_param      36 = rgb2_green
+7  = gate_threshold          17 = trig_snare               27 = fader2_target_param      37 = rgb2_blue
+8  = portamento_time         18 = trig_hh                  28 = fader3_target_param      38 = dimmer1_source
+9  = scale                   19 = master_volume            29 = button3_target_param     39 = dimmer2_source
 */
   Serial.println("Initialisation des presets...");
 
+//                  |pandepth        |time           |porta          |osc2off       |kick       |master        |type             |fader2        |b3_pressed     /r2             /dim2
+//                       |pitch          |delFB          |scale         |autofreq       |snare      |filter         |ir1             |fader3        /r1             /g2
+//                           |vibraspeed     |osc            |octlow        |tonic          |hh         |cutoff         |ir2            |button3        /g1             /b2
+//                               |vibradepth     |gate           |osc2vol       |drums         |master     |reso            |fader1         |b3_rel         /b1             /dim1
+
+    // Preset 2 - Classical scale
+  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
+  setAllParameters(  0,  0, 90, 2, 74, 83,255,155,213,255,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15, 14,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
+  savePreset(2, "Classical scale");
+
+      // Preset 3 - Classical scale siren
+  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
+  setAllParameters(  0,  0, 100, 3, 74, 83,100,155,213,255,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15, 14,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
+  savePreset(3, "Classical scale siren");
+
+  // Preset 1 - Bass growler
+  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
+  setAllParameters(  0,  0, 59, 16, 74, 83,255,155,213,  0,  0,255,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0, 12,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
+  savePreset(1, "Bass growler");
   
+
   // Preset 5 - Furious octaver growl feedbacker
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
   setAllParameters(  0,150,221, 10, 74,241,255,  0, 91,255,  0,255,196,  0,  0,255,  0,  0,  0, 50,  0,  0,  0,  0, 12,  3, 21, 22, 6, 18,  0,  5,255,  0,  0,  0,255,  0,  0,  1);
   savePreset(5, "FuriousGrowl");
 
 
     // Preset 0 - Classical
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
-  setAllParameters(  0,  0, 59, 16, 74, 83,255, 155,213,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3,  2,  5,  6, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
+  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
+  setAllParameters(  0,  0, 59, 16, 74, 83,255,155,213,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15,  2,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
   savePreset(0, "Classical");
 
     // Preset 7 - À définir
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
   setAllParameters(  0,  0,  0,  0,  0,  0,  0,  120, 75, 50,  0,150, 150,  0, 0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3, 21, 22, 23, 18,  0,  5,  0,255, 15,200,10, 255, 0,  0);
   savePreset(7, "Preset7");
 
     // Preset 6 - À définir
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
   setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  75,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3, 21, 22, 23, 18,  0,  5,255,  0, 50,  0,255, 255, 0,  0);
   savePreset(6, "Preset6");
 
   // Preset 4 - Simple sans effet
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
   setAllParameters(  0,  0, 64, 10,  0,  0,100,  80, 75,  0,  0,  0,  0,  0,  0,255,  0,  0,  0, 0,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0,  0,  1);
   savePreset(4, "Simple");
   
   // Preset 1 - Simple avec effet
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
   setAllParameters(  0,  0,  0,  0,130,110,100, 100, 30,  0,255,  0,  0,  0,  0,255,  0,  0,  0, 0,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,255,  0,  0,  0,  1);
-  savePreset(1, "Simple+Effet");
+  savePreset(8, "Simple+Effet");
   
-  // Preset 2 - Octaver and growl
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
-  setAllParameters(  0,  0, 64, 10, 90,110,145,  0, 75,255,  0,255,140,  0,  0,255,  0,  0,  0, 0,  0,  0,  0,  0,  1,  3,  21, 22, 23, 18,  0,  5,255,255,  50,  0,255,255,  0,  1);
-  savePreset(2, "OctaverGrowl");
+  // // Preset 2 - Octaver and growl
+  // //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
+  // setAllParameters(  0,  0, 64, 10, 90,110,145,  0, 75,255,  0,255,140,  0,  0,255,  0,  0,  0, 0,  0,  0,  0,  0,  1,  3,  21, 22, 23, 18,  0,  5,255,255,  50,  0,255,255,  0,  1);
+  // savePreset(2, "OctaverGrowl");
   
-  // Preset 3 - Modern siren vibrafrenzy
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
-  setAllParameters(  0,  0,162,129,140,167,205,  0,108,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,255,  0, 50,  0,  1);
-  savePreset(3, "ModernSiren");
-  
-
-  
+  // // Preset 3 - Modern siren vibrafrenzy
+  // //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
+  // setAllParameters(  0,  0,162,129,140,167,205,  0,108,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,255,  0, 50,  0,  1);
+  // savePreset(3, "ModernSiren");
   
 
   
+  
 
   
-  // Preset 8 - À définir
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
-  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0,  0,  1);
-  savePreset(8, "Preset8");
+
+  
   
   // Preset 9 - À définir
-  //                 1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  40
+  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
   setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0,  0,  1);
   savePreset(9, "Preset9");
   
