@@ -1,4 +1,4 @@
-#define VERSION 160
+#define VERSION 161
 /*
 // Contrôleur interactif ESP32 avec capteurs Sharp IR
 // Utilise ESP-NOW pour transmettre les données DMX
