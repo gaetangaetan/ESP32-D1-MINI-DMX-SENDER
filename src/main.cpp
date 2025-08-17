@@ -1,4 +1,4 @@
-#define VERSION 161
+#define VERSION 162 // version 162 : unicast vers récepteur ESP8266
 /*
 // Contrôleur interactif ESP32 avec capteurs Sharp IR
 // Utilise ESP-NOW pour transmettre les données DMX
@@ -155,15 +155,15 @@ typedef struct struct_ksoloti_feedback
 struct_dmx_packet outgoingDMXPacket;
 struct_ksoloti_feedback incomingKsolotiData;
 
-// Adresse de diffusion ESP-NOW
-uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+// Adresse MAC du récepteur ESP8266
+uint8_t receiverAddress[] = {0x2C, 0xF4, 0x32, 0x7A, 0x08, 0x1E};
 
 // Variables pour stocker les données reçues du Ksoloti
 uint8_t ksoloti_val1 = 0;
 uint8_t ksoloti_val2 = 0;
 bool ksoloti_data_updated = false;
 
-esp_now_peer_info_t peerInfo;
+esp_now_peer_info_t peerInfo; // Configuration du peer récepteur ESP8266
 
 // Variables de timing
 unsigned long lastEmissionTime = 0;
@@ -1237,8 +1237,8 @@ void setup()
   esp_now_register_send_cb(OnDataSent);
   esp_now_register_recv_cb(OnDataRecv);
   
-  // Configuration du peer
-  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  // Configuration du peer récepteur ESP8266 (unicast au lieu de broadcast)
+  memcpy(peerInfo.peer_addr, receiverAddress, 6);
   peerInfo.channel = 0;
   peerInfo.encrypt = false;
   
@@ -1248,6 +1248,13 @@ void setup()
   }
   
   Serial.println("ESP-NOW initialisé");
+  Serial.println("Mode: Unicast vers récepteur ESP8266");
+  Serial.print("Adresse MAC cible: ");
+  for (int i = 0; i < 6; i++) {
+    Serial.print(receiverAddress[i], HEX);
+    if (i < 5) Serial.print(":");
+  }
+  Serial.println();
   Serial.println("Fréquence d'émission: " + String(EMISSION_FREQUENCY) + "Hz");
   Serial.println("Capteurs Sharp IR sur GPIO35 et GPIO36");
   Serial.println("Faders sur GPIO32, GPIO33, GPIO34");
@@ -1276,7 +1283,7 @@ void sendDMXvalues()
     }
     
     // Envoi du paquet via ESP-NOW
-    esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&outgoingDMXPacket, sizeof(outgoingDMXPacket));
+    esp_err_t result = esp_now_send(receiverAddress, (uint8_t *)&outgoingDMXPacket, sizeof(outgoingDMXPacket));
     
     if (result == ESP_OK) {
       //Serial.print(" [OK]");
