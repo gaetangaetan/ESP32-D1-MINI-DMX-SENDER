@@ -219,6 +219,13 @@ uint8_t rgb2RedDimmed = 0;       // RGB2 rouge dimmé
 uint8_t rgb2GreenDimmed = 0;     // RGB2 vert dimmé
 uint8_t rgb2BlueDimmed = 0;      // RGB2 bleu dimmé
 
+// Variables pour la transposition du pitch
+int8_t transpose = 0;           // Valeur de transposition (-12 à +12)
+uint8_t transpose_factor = 24;  // Facteur de transposition
+
+// Prototypes
+void displayUnified();
+
 // Fonction pour stabiliser un capteur IR avec moyenne mobile et limitation d'aberrants
 int stabilizeIRSensor(int newValue, int* buffer, int& index, int& sum, bool& initialized) {
   // Initialisation : remplir le buffer avec la première valeur
@@ -299,14 +306,70 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len)
 void setParameter(const char* paramName, uint8_t value) {
   for (int i = 0; i < PRESET_SIZE; i++) {
     if (strcmp(parameters[i].name, paramName) == 0) {
-      parameters[i].value = value;
-      // Mettre à jour le tableau DMX
-      dmxValues[parameters[i].dmxChannel - 1] = value;
-      //Serial.println("Paramètre " + String(paramName) + " = " + String(value));
+      // Vérifier si c'est le paramètre pitch (indice 1)
+      if (i == 1) { // pitch
+        // Appliquer la transposition
+        int transposedValue = (int)value + (transpose * transpose_factor);
+        
+        // Limiter la valeur entre 0 et 255
+        if (transposedValue < 0) transposedValue = 0;
+        if (transposedValue > 255) transposedValue = 255;
+        
+        parameters[i].value = (uint8_t)transposedValue;
+        // Mettre à jour le tableau DMX
+        dmxValues[parameters[i].dmxChannel - 1] = (uint8_t)transposedValue;
+        
+        // Debug de la transposition
+        // Serial.print("Pitch transposé: ");
+        // Serial.print(value);
+        // Serial.print(" + (");
+        // Serial.print(transpose);
+        // Serial.print(" × ");
+        // Serial.print(transpose_factor);
+        // Serial.print(") = ");
+        // Serial.println(transposedValue);
+      } else {
+        // Pour les autres paramètres, comportement normal
+        parameters[i].value = value;
+        // Mettre à jour le tableau DMX
+        dmxValues[parameters[i].dmxChannel - 1] = value;
+      }
       return;
     }
   }
   //Serial.println("Paramètre " + String(paramName) + " non trouvé");
+}
+
+// Fonction pour mettre à jour le gate_threshold avec la transposition
+void updateGateThresholdWithTranspose() {
+  // Récupérer la valeur par défaut du preset pour gate_threshold
+  uint8_t originalGateThreshold = presets[selectedPreset].values[7]; // indice 7 = gate_threshold
+  
+  // Appliquer la transposition
+  int transposedGateThreshold = (int)originalGateThreshold + (transpose * transpose_factor);
+  
+  // Limiter la valeur entre 0 et 255
+  if (transposedGateThreshold < 0) transposedGateThreshold = 0;
+  if (transposedGateThreshold > 255) transposedGateThreshold = 255;
+  
+  // Mettre à jour le paramètre
+  parameters[7].value = (uint8_t)transposedGateThreshold;
+  dmxValues[parameters[7].dmxChannel - 1] = (uint8_t)transposedGateThreshold;
+  
+  // Debug
+  Serial.print("Gate threshold ajusté: ");
+  Serial.print(originalGateThreshold);
+  Serial.print(" + (");
+  Serial.print(transpose);
+  Serial.print(" × ");
+  Serial.print(transpose_factor);
+  Serial.print(") = ");
+  Serial.print(transposedGateThreshold);
+  Serial.print(" (DMX canal ");
+  Serial.print(parameters[7].dmxChannel);
+  Serial.print(", index DMX ");
+  Serial.print(parameters[7].dmxChannel - 1);
+  Serial.println(")");
 }
 
 // Fonction pour obtenir la valeur d'un paramètre par son nom
@@ -883,7 +946,7 @@ Targets : (0=IR1, 1=IR2, 2=Fader1, 3=Fader2, 4=Fader3)
 
     // Preset 2 - Classical scale
   //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0, 90, 2, 74, 83,255,155,213,255,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15, 14,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
+  setAllParameters(  0,  0, 90,  2, 74, 83,255,155,213,255,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15, 14,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
   savePreset(2, "Classical scale");
 
       // Preset 3 - Classical scale siren
@@ -891,9 +954,19 @@ Targets : (0=IR1, 1=IR2, 2=Fader1, 3=Fader2, 4=Fader3)
   setAllParameters(  0,  0, 100, 3, 74, 83,100,155,213,255,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15, 14,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
   savePreset(3, "Classical scale siren");
 
+      // Preset 0 - Classical
+  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
+  setAllParameters(  0,  0, 59, 16, 74, 83,255,155,213,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15,  2,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
+  savePreset(0, "Classical");
+
+  // Preset 6 - Buzz1
+  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
+  setAllParameters(  0,  0, 59, 16, 74, 83,100,155,213,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15,  2,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
+  savePreset(6, "Buzz1");
+
   // Preset 1 - Bass growler
   //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0, 59, 16, 74, 83,255,155,213,  0,  0,255,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0, 12,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
+  setAllParameters(  0,  0, 59, 16, 74, 83,255,100,213,  0,  0,255,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0, 12,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
   savePreset(1, "Bass growler");
   
 
@@ -903,20 +976,14 @@ Targets : (0=IR1, 1=IR2, 2=Fader1, 3=Fader2, 4=Fader3)
   savePreset(5, "FuriousGrowl");
 
 
-    // Preset 0 - Classical
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0, 59, 16, 74, 83,255,155,213,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15,  2,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
-  savePreset(0, "Classical");
+
 
     // Preset 7 - À définir
   //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
   setAllParameters(  0,  0,  0,  0,  0,  0,  0,  120, 75, 50,  0,150, 150,  0, 0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3, 21, 22, 23, 18,  0,  5,  0,255, 15,200,10, 255, 0,  0);
   savePreset(7, "Preset7");
 
-    // Preset 6 - À définir
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  75,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3, 21, 22, 23, 18,  0,  5,255,  0, 50,  0,255, 255, 0,  0);
-  savePreset(6, "Preset6");
+
 
   // Preset 4 - Simple sans effet
   //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
@@ -1101,21 +1168,45 @@ void handleButtons() {
 
 // Fonction pour gérer les boutons avec interruptions
 void handleButtonInterrupts() {
-  // Traiter les interruptions du bouton 1
+  // Traiter les interruptions du bouton 1 (décrémenter transposition)
   if (buttonInterruptFlags[0]) {
-    dmxValues[116] = TRIG_LENGTH; // Canal DMX 117 (trig_kick)
-    Serial.println("Bouton 1 - Trig Kick déclenché (ISR) - Durée: " + String(TRIG_LENGTH));
+    if (transpose > -12) {
+      transpose--;
+      Serial.print("Bouton 1 - Transposition décrémentée: ");
+      Serial.println(transpose);
+      
+      // Afficher immédiatement la nouvelle transposition
+      displayUnified();
+      
+      // Recharger le preset pour appliquer la nouvelle transposition
+      loadPreset(selectedPreset);
+      
+      // Mettre à jour le gate_threshold avec la nouvelle transposition
+      updateGateThresholdWithTranspose();
+    }
     buttonInterruptFlags[0] = false;
   }
   
-  // Traiter les interruptions du bouton 2
+  // Traiter les interruptions du bouton 2 (incrémenter transposition)
   if (buttonInterruptFlags[1]) {
-    dmxValues[117] = TRIG_LENGTH; // Canal DMX 118 (trig_snare)
-    Serial.println("Bouton 2 - Trig Snare déclenché (ISR) - Durée: " + String(TRIG_LENGTH));
+    if (transpose < 12) {
+      transpose++;
+      Serial.print("Bouton 2 - Transposition incrémentée: ");
+      Serial.println(transpose);
+      
+      // Afficher immédiatement la nouvelle transposition
+      displayUnified();
+      
+      // Recharger le preset pour appliquer la nouvelle transposition
+      loadPreset(selectedPreset);
+      
+      // Mettre à jour le gate_threshold avec la nouvelle transposition
+      updateGateThresholdWithTranspose();
+    }
     buttonInterruptFlags[1] = false;
   }
   
-  // Traiter les interruptions du bouton 3
+  // Traiter les interruptions du bouton 3 (trig_hh)
   if (buttonInterruptFlags[2]) {
     dmxValues[118] = TRIG_LENGTH; // Canal DMX 119 (trig_hh)
     Serial.println("Bouton 3 - Trig HH déclenché (ISR) - Durée: " + String(TRIG_LENGTH));
@@ -1137,18 +1228,23 @@ void handleEncoder() {
   if (newPreset != selectedPreset) {
     selectedPreset = newPreset;
     
+    // Réinitialiser la transposition lors du changement de preset
+    transpose = 0;
+    
     // Charger le preset sélectionné
     loadPreset(selectedPreset);
     
-    // Afficher le numéro du preset sur le display avec indicateur
-    display.clear();    
-    display.showNumberDec(selectedPreset);
+    // Pas besoin d'updateGateThresholdWithTranspose() car transpose = 0
+    
+    // Afficher le nouveau preset avec transposition réinitialisée
+    displayUnified();
     
     // Debug sur le moniteur série
     Serial.print("Preset changé: ");
     Serial.print(selectedPreset);
     Serial.print(" - ");
     Serial.println(presets[selectedPreset].name);
+    Serial.println("Transposition réinitialisée à 0");
   }
   
   // Gestion du bouton de l'encodeur (toggle filtre)
@@ -1158,7 +1254,7 @@ void handleEncoder() {
     uint8_t newFilterState = (currentFilterState == 0) ? 255 : 0;
     setParameter("filter_on_off", newFilterState);
     
-    // Afficher l'état du filtre sur le display pendant 2 secondes
+    // Afficher temporairement l'état du filtre
     display.clear();
     if (newFilterState == 255) {
       display.showNumberDec(9999); // Afficher "9999" pour indiquer FILTRE ON
@@ -1169,10 +1265,9 @@ void handleEncoder() {
     Serial.print("Filtre: ");
     Serial.println((newFilterState == 255) ? "ON" : "OFF");
     
-    // Attendre 200ms puis revenir à l'affichage du preset
-    delay(200);
-    display.clear();
-    display.showNumberDec(selectedPreset);
+    // Attendre 500ms puis revenir à l'affichage unifié
+    delay(500);
+    displayUnified();
     
     encoderButtonPressed = true;
     lastEncoderButtonPress = millis();
@@ -1183,14 +1278,54 @@ void handleEncoder() {
   }
 }
 
+// Fonction pour afficher la transposition et le preset de manière unifiée
+void displayUnified() {
+  // Format: TTPP où TT = transposition (-12 à +12) et PP = preset (0-9)
+  // Exemples: 
+  // - Transposition +5, preset 3 → "0503" 
+  // - Transposition -2, preset 7 → "-207"
+  // - Transposition 0, preset 1 → "0001"
+  
+  uint8_t segments[4] = {0, 0, 0, 0};
+  
+  // Calcul pour les digits de la transposition (positions 0 et 1)
+  if (transpose == 0) {
+    // Transposition = 0 : afficher "00"
+    segments[0] = display.encodeDigit(0);
+    segments[1] = display.encodeDigit(0);
+  } else if (transpose > 0) {
+    // Transposition positive : afficher directement le nombre
+    if (transpose >= 10) {
+      segments[0] = display.encodeDigit(transpose / 10);
+      segments[1] = display.encodeDigit(transpose % 10);
+    } else {
+      segments[0] = display.encodeDigit(0);
+      segments[1] = display.encodeDigit(transpose);
+    }
+  } else {
+    // Transposition négative : afficher "-" + valeur absolue
+    segments[0] = 0x40; // Segment "-"
+    int absTranspose = -transpose;
+    if (absTranspose >= 10) {
+      segments[1] = display.encodeDigit(absTranspose / 10);
+    } else {
+      segments[1] = display.encodeDigit(absTranspose);
+    }
+  }
+  
+  // Calcul pour les digits du preset (positions 2 et 3)
+  segments[2] = display.encodeDigit(0); // Toujours 0 car preset va de 0 à 9
+  segments[3] = display.encodeDigit(selectedPreset);
+  
+  // Afficher les segments
+  display.setSegments(segments);
+}
+
 // Fonction pour mettre à jour l'afficheur TM1637
 void updateDisplay() {
   if (millis() - lastDisplayUpdate >= DISPLAY_UPDATE_INTERVAL) {
-    // Afficher le preset sélectionné avec un indicateur visuel
-    // Format: "P-XX" où XX est le numéro du preset
-    
-    display.showNumberDec(selectedPreset);
-    
+    // Utiliser la nouvelle fonction d'affichage unifiée
+    displayUnified();
     lastDisplayUpdate = millis();
   }
 }
@@ -1222,9 +1357,13 @@ void setup()
   
   // Chargement du preset 1 au démarrage
   loadPreset(1);
+  selectedPreset = 1; // S'assurer que selectedPreset est correct
   
   // Initialisation de l'interface utilisateur
   initializeUserInterface();
+  
+  // Affichage initial unifié
+  displayUnified();
   
   // Configuration ESP-NOW
   WiFi.mode(WIFI_STA);
@@ -1260,7 +1399,15 @@ void setup()
   Serial.println("Faders sur GPIO32, GPIO33, GPIO34");
   Serial.println("Encodeur KY-040 sur GPIO26, GPIO27, GPIO25");
   Serial.println("Afficheur TM1637 sur GPIO18, GPIO19");
+  Serial.println("  Format d'affichage: TTPP (TT=transposition, PP=preset)");
+  Serial.println("  Exemples: 0501=transpose +5/preset 1, -203=transpose -2/preset 3");
   Serial.println("Boutons push sur GPIO21, GPIO22, GPIO23");
+  Serial.println("Bouton 1: Décrémenter transposition (-12 à +12)");
+  Serial.println("Bouton 2: Incrémenter transposition (-12 à +12)");
+  Serial.println("Bouton 3: Trig HH");
+  Serial.println("Bouton encodeur: Toggle filtre ON/OFF");
+  Serial.println("Transposition actuelle: " + String(transpose) + " (×" + String(transpose_factor) + ")");
+  Serial.println("Transposition appliquée au pitch et gate_threshold");
   Serial.println("================================");
 }
 
@@ -1379,7 +1526,7 @@ void testInputs() {
   Serial.print(dmxValues[3]);
   Serial.println();
   
-  // Afficher la valeur de l'encodeur sur le display
+  // En mode test, afficher l'encodeur sur les 4 digits
   display.clear();
   uint16_t displayValue = abs(testEncoderValue) % 10000; // Limiter à 4 chiffres
   display.showNumberDec(displayValue);
@@ -1426,7 +1573,7 @@ void loop()
  // handleEncoder();
   
   // Mise à jour de l'afficheur TM1637
-  //updateDisplay();
+  updateDisplay();
   
   // Émission à fréquence fixe (50Hz)
   if (millis() - lastEmissionTime >= EMISSION_INTERVAL) {
