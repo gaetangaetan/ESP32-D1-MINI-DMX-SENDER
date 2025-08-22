@@ -9,6 +9,10 @@
 		{
 			"name": "tests_ESP32D1",
 			"path": "../tests_ESP32D1"
+		},
+		{
+			"name": "ONIRIGUN juillet 2025",
+			"path": "../ONIRIGUN juillet 2025"
 		}
 	],
 	"settings": {}

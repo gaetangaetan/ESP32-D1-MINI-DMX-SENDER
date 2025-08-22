@@ -1,4 +1,6 @@
-#define VERSION 162 // version 162 : unicast vers récepteur ESP8266
+// adresse mac de l'onirigun : 68:C6:3A:FD:37:17
+
+#define VERSION 163 // onirigun
 /*
 // Contrôleur interactif ESP32 avec capteurs Sharp IR
 // Utilise ESP-NOW pour transmettre les données DMX
