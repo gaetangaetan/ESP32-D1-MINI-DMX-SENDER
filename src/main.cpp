@@ -145,25 +145,25 @@ typedef struct struct_dmx_packet
   uint8_t dmxvalues[128];
 } struct_dmx_packet;
 
-// Structure pour les données de retour du Ksoloti
-typedef struct struct_ksoloti_feedback
-{
-  uint8_t startByte;    // 0xCC pour identifier les paquets de retour
-  uint8_t val1;         // Première valeur du Ksoloti
-  uint8_t val2;         // Deuxième valeur du Ksoloti
-  uint8_t checksum;     // Checksum pour validation
-} struct_ksoloti_feedback;
+// Structure pour les messages de l'Onirigun
+typedef struct {
+  uint8_t type;            // 0xA0 = animation trigger
+  uint8_t animationNumber; // numéro d'animation à déclencher
+} AnimationTriggerMessage;
 
 struct_dmx_packet outgoingDMXPacket;
-struct_ksoloti_feedback incomingKsolotiData;
+AnimationTriggerMessage incomingAnimationTrigger;
 
 // Adresse MAC du récepteur ESP8266
 uint8_t receiverAddress[] = {0x2C, 0xF4, 0x32, 0x7A, 0x08, 0x1E};
 
-// Variables pour stocker les données reçues du Ksoloti
-uint8_t ksoloti_val1 = 0;
-uint8_t ksoloti_val2 = 0;
-bool ksoloti_data_updated = false;
+// Adresse MAC de l'Onirigun
+uint8_t onirigunAddress[] = {0x68, 0xC6, 0x3A, 0xFD, 0x37, 0x17};
+
+// Variables pour le trigger externe de l'Onirigun
+bool externalTriggerActive = false;
+unsigned long externalTriggerTime = 0;
+const unsigned long EXTERNAL_TRIGGER_DURATION = 100; // 100ms de durée du trigger
 
 esp_now_peer_info_t peerInfo; // Configuration du peer récepteur ESP8266
 
@@ -280,27 +280,59 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
 // Callback pour la réception de données ESP-NOW
 void OnDataRecv(const uint8_t *mac_addr, const uint8_t *data, int data_len)
 {
-  // Vérifier si c'est un paquet de données du Ksoloti
-  if (data_len == sizeof(struct_ksoloti_feedback)) {
-    memcpy(&incomingKsolotiData, data, sizeof(struct_ksoloti_feedback));
-    
-    // Vérifier le byte de démarrage et le checksum
-    if (incomingKsolotiData.startByte == 0xCC) {
-      uint8_t calculated_checksum = incomingKsolotiData.startByte + 
-                                   incomingKsolotiData.val1 + 
-                                   incomingKsolotiData.val2;
-      
-      if (calculated_checksum == incomingKsolotiData.checksum) {
-        ksoloti_val1 = incomingKsolotiData.val1;
-        ksoloti_val2 = incomingKsolotiData.val2;
-        ksoloti_data_updated = true;
-        
-        // Serial.print("Données Ksoloti reçues: val1=");
-        // Serial.print(ksoloti_val1);
-        // Serial.print(", val2=");
-        // Serial.println(ksoloti_val2);
-      }
+  // Vérifier que le message vient bien de l'Onirigun
+  bool isFromOnirigun = true;
+  for (int i = 0; i < 6; i++) {
+    if (mac_addr[i] != onirigunAddress[i]) {
+      isFromOnirigun = false;
+      break;
     }
+  }
+  
+  // Ignorer tous les messages qui ne proviennent pas de l'Onirigun
+  if (!isFromOnirigun) {
+    return; // Sortir immédiatement sans traiter le message
+  }
+  
+  // Vérifier si c'est un message d'animation de l'Onirigun
+  if (data_len == sizeof(AnimationTriggerMessage)) {
+    memcpy(&incomingAnimationTrigger, data, sizeof(AnimationTriggerMessage));
+    
+    // Debug
+    // Serial.print("Message Onirigun reçu - Animation: ");
+    // Serial.println(incomingAnimationTrigger.animationNumber);
+    
+    // Vérifier si c'est un message de trigger (type 0xA0)
+    if (incomingAnimationTrigger.type == 0xA0) {
+      // Vérifier s'il y a une collision avec un trigger déjà actif
+      if (dmxValues[118] > 0) {
+        Serial.print("COLLISION DÉTECTÉE ! Trigger déjà actif (valeur restante: ");
+        Serial.print(dmxValues[118]);
+        Serial.println(") - Redémarrage du trigger");
+      } else {
+        Serial.println("Nouveau trigger - Canal libre");
+      }
+      
+      // Activer le trigger externe (toujours, même en cas de collision)
+      externalTriggerActive = true;
+      externalTriggerTime = millis();
+      
+      // Déclencher la même action que le bouton 3 (trig_hh)
+      dmxValues[118] = TRIG_LENGTH; // Canal DMX 119 (trig_hh)
+      Serial.print("Trigger externe - Trig HH déclenché - Valeur DMX: ");
+      Serial.print(dmxValues[118]);
+      Serial.print(" - Durée estimée: ");
+      Serial.print(TRIG_LENGTH * 20);
+      Serial.println("ms");
+    } else {
+      Serial.print("Message Onirigun reçu avec type invalide: 0x");
+      Serial.println(incomingAnimationTrigger.type, HEX);
+    }
+  }
+  // Message de taille inconnue de l'Onirigun
+  else {
+    Serial.print("Message Onirigun de taille inconnue ignoré: ");
+    Serial.println(data_len);
   }
 }
 
@@ -646,22 +678,22 @@ void updateRGBWithDimmer() {
   
   // Debug (optionnel)
   static unsigned long lastDimmerDebugTime = 0;
-  if (millis() - lastDimmerDebugTime > 2000) { // Debug toutes les 2 secondes
-    Serial.print("Dimmer - S1:");
-    Serial.print(dimmer1Source);
-    Serial.print(" S2:");
-    Serial.print(dimmer2Source);
-    Serial.print(" V1:");
-    Serial.print(control1Value);
-    Serial.print(" V2:");
-    Serial.print(control2Value);
-    Serial.print(" D1:");
-    Serial.print(dimmerValue1, 2);
-    Serial.print(" D2:");
-    Serial.print(dimmerValue2, 2);
-    Serial.println();
-    lastDimmerDebugTime = millis();
-  }
+  // if (millis() - lastDimmerDebugTime > 2000) { // Debug toutes les 2 secondes
+  //   Serial.print("Dimmer - S1:");
+  //   Serial.print(dimmer1Source);
+  //   Serial.print(" S2:");
+  //   Serial.print(dimmer2Source);
+  //   Serial.print(" V1:");
+  //   Serial.print(control1Value);
+  //   Serial.print(" V2:");
+  //   Serial.print(control2Value);
+  //   Serial.print(" D1:");
+  //   Serial.print(dimmerValue1, 2);
+  //   Serial.print(" D2:");
+  //   Serial.print(dimmerValue2, 2);
+  //   Serial.println();
+  //   lastDimmerDebugTime = millis();
+  // }
 }
 
 
@@ -677,7 +709,8 @@ void handlePhysicalControls() {
   uint8_t ir2Value = stabilizedIR2 / 16; // 0-4095 → 0-255
   
   // Lecture des faders (inversés : 4095-0 → 0-255)
-  uint8_t fader1Value = (4095 - analogRead(FADER_1_PIN)) / 16; // 4095-0 → 0-255
+  //uint8_t fader1Value = (4095 - analogRead(FADER_1_PIN)) / 16; // 4095-0 → 0-255
+  uint8_t fader1Value = 0; // fader1 cassé, on le remplace par 0 en attendant de le réparer
   uint8_t fader2Value = (4095 - analogRead(FADER_2_PIN)) / 16;
   uint8_t fader3Value = (4095 - analogRead(FADER_3_PIN)) / 16;
   
@@ -750,22 +783,22 @@ void handlePhysicalControls() {
   
   // Debug (optionnel)
   static unsigned long lastDebugTime = 0;
-  if (millis() - lastDebugTime > 1000) { // Debug toutes les secondes
-    Serial.print("Contrôles - IR1:");
-    Serial.print(ir1Value);
-    Serial.print(" IR2:");
-    Serial.print(ir2Value);
-    Serial.print(" F1:");
-    Serial.print(fader1Value);
-    Serial.print(" F2:");
-    Serial.print(fader2Value);
-    Serial.print(" F3:");
-    Serial.print(fader3Value);
-    Serial.print(" B3:");
-    Serial.print(button3State ? "ON" : "OFF");
-    Serial.println();
-    lastDebugTime = millis();
-  }
+  // if (millis() - lastDebugTime > 1000) { // Debug toutes les secondes
+  //   Serial.print("Contrôles - IR1:");
+  //   Serial.print(ir1Value);
+  //   Serial.print(" IR2:");
+  //   Serial.print(ir2Value);
+  //   Serial.print(" F1:");
+  //   Serial.print(fader1Value);
+  //   Serial.print(" F2:");
+  //   Serial.print(fader2Value);
+  //   Serial.print(" F3:");
+  //   Serial.print(fader3Value);
+  //   Serial.print(" B3:");
+  //   Serial.print(button3State ? "ON" : "OFF");
+  //   Serial.println();
+  //   lastDebugTime = millis();
+  // }
 }
 
 // Fonction d'initialisation du rotary encoder (désactivée - encoder non câblé)
@@ -1388,11 +1421,30 @@ void setup()
     return;
   }
   
+  // Ajouter l'Onirigun comme peer pour recevoir ses messages
+  esp_now_peer_info_t onirigunPeerInfo;
+  memcpy(onirigunPeerInfo.peer_addr, onirigunAddress, 6);
+  onirigunPeerInfo.channel = 0;
+  onirigunPeerInfo.encrypt = false;
+  
+  if (esp_now_add_peer(&onirigunPeerInfo) != ESP_OK) {
+    Serial.println("Erreur d'ajout du peer Onirigun");
+  } else {
+    Serial.println("Peer Onirigun ajouté avec succès");
+  }
+  
   Serial.println("ESP-NOW initialisé");
-  Serial.println("Mode: Unicast vers récepteur ESP8266");
+  Serial.println("Mode: Unicast vers récepteur ESP8266 + Réception Onirigun");
   Serial.print("Adresse MAC cible: ");
   for (int i = 0; i < 6; i++) {
     Serial.print(receiverAddress[i], HEX);
+    if (i < 5) Serial.print(":");
+  }
+  Serial.println();
+  
+  Serial.print("Adresse MAC Onirigun: ");
+  for (int i = 0; i < 6; i++) {
+    Serial.print(onirigunAddress[i], HEX);
     if (i < 5) Serial.print(":");
   }
   Serial.println();
@@ -1408,6 +1460,7 @@ void setup()
   Serial.println("Bouton 2: Incrémenter transposition (-12 à +12)");
   Serial.println("Bouton 3: Trig HH");
   Serial.println("Bouton encodeur: Toggle filtre ON/OFF");
+  Serial.println("Trigger externe Onirigun: Trig HH (même action que bouton 3)");
   Serial.println("Transposition actuelle: " + String(transpose) + " (×" + String(transpose_factor) + ")");
   Serial.println("Transposition appliquée au pitch et gate_threshold");
   Serial.println("================================");
@@ -1546,6 +1599,45 @@ void testInputs() {
   // Mettre à jour l'affichage
   FastLED.show();
 }
+
+// Fonction pour gérer le trigger externe de l'Onirigun
+void handleExternalTrigger() {
+  // Synchroniser externalTriggerActive avec la vraie valeur DMX
+  bool wasTriggerActive = externalTriggerActive;
+  externalTriggerActive = (dmxValues[118] > 0);
+  
+  // Détecter les changements d'état
+  if (wasTriggerActive && !externalTriggerActive) {
+    Serial.println("Trigger externe terminé (DMX canal 119 = 0)");
+  }
+  
+  // Debug : afficher l'état du trigger externe avec la vraie valeur DMX
+  static unsigned long lastDebugTime = 0;
+  static uint8_t lastDmxValue = 0;
+  
+  if (dmxValues[118] != lastDmxValue) {
+    Serial.print("Canal DMX 119 (trig_hh) changé: ");
+    Serial.print(lastDmxValue);
+    Serial.print(" -> ");
+    Serial.print(dmxValues[118]);
+    Serial.print(" (temps restant estimé: ");
+    Serial.print(dmxValues[118] * 20);
+    Serial.println("ms)");
+    lastDmxValue = dmxValues[118];
+    lastDebugTime = millis();
+  }
+  
+  // Debug périodique si le trigger est actif
+  if (externalTriggerActive && (millis() - lastDebugTime > 100)) { // Debug toutes les 100ms
+    Serial.print("Trigger actif - Valeur DMX restante: ");
+    Serial.print(dmxValues[118]);
+    Serial.print(" (≈");
+    Serial.print(dmxValues[118] * 20);
+    Serial.println("ms)");
+    lastDebugTime = millis();
+  }
+}
+
 void loop()
 {
   // Incrémenter le compteur d'affichage
@@ -1570,6 +1662,9 @@ void loop()
   
   // Gestion des boutons push
   handleButtonInterrupts();
+  
+  // Gestion du trigger externe de l'Onirigun
+  handleExternalTrigger();
   
   // Gestion de l'encodeur KY-040
  // handleEncoder();
