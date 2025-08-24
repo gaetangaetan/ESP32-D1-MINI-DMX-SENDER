@@ -27,6 +27,9 @@
 #include <TM1637Display.h>
 #include <driver/adc.h>  // Pour les constantes ADC de l'ESP32
 #include <FastLED.h>     // Pour le ruban WS2812B
+#include <WebServer.h>   // Pour le serveur web
+#include <LittleFS.h>    // Pour le système de fichiers
+#include <ArduinoJson.h> // Pour le format JSON
 
 #define CONTROL_TEST 0 // 1 pour tester les entrées, 0 pour le fonctionnement normal
 
@@ -68,12 +71,18 @@
 // Configuration des presets
 #define PRESET_SIZE 40  // Nombre de paramètres par preset (40 au lieu de 38)
 #define MAX_PRESETS 10  // Nombre maximum de presets
+#define MAX_WEB_PRESETS 5  // Nombre maximum de presets web
 
 // Configuration des trigs
 #define TRIG_LENGTH 5   // Durée des trigs en nombre de paquets DMX
 
 // Configuration du dimmer RGB
 #define DIMMER_SPEED 0.01 // Vitesse de l'inertie du dimmer (0.0-1.0, plus petit = plus lent)
+
+// Configuration du serveur web
+#define WEB_SERVER_PORT 80
+#define AP_SSID "Ksoloti Kontrol"
+#define AP_PASSWORD "ksoloti123"
 
 // Structure pour un paramètre
 typedef struct {
@@ -89,9 +98,50 @@ typedef struct {
   uint8_t values[PRESET_SIZE]; // Valeurs des paramètres
 } Preset;
 
+// Structure pour un preset web
+typedef struct {
+  char name[32];
+  uint8_t values[21];  // 21 paramètres audio principaux (0-20)
+} WebPreset;
+
+// ============================================================================
+// DÉCLARATIONS DES FONCTIONS DE L'INTERFACE WEB
+// ============================================================================
+
+// Fonctions de l'interface web
+void setupWebInterface();
+void setupWebRoutes();
+void handleWebInterface();
+void handleGetParameters();
+void handleUpdateParameter();
+void handleGetAssignments();
+void handleUpdateAssignments();
+void handleSaveWebPreset();
+void handleLoadWebPreset();
+void handleListWebPresets();
+void handleNotFound();
+void saveWebPresets();
+void loadWebPresets();
+void saveWebAssignments();
+void loadWebAssignments();
+void saveWebStateToPreset0();
+void loadWebStateFromPreset0();
+void handleWebPhysicalControls();
+
 // Création des objets
 TM1637Display display(TM1637_CLK_PIN, TM1637_DIO_PIN);
 ESP32Encoder encoder;
+
+// Objets pour l'interface web
+WebServer webServer(WEB_SERVER_PORT);
+
+// Variables pour l'interface web
+bool webModeActive = false;           // True si le preset 0 (web) est actif
+uint8_t webAssignments[4] = {0, 0, 0, 0}; // IR1, IR2, Fader2, Fader3 (0 = OFF, 1-21 = paramètre)
+uint8_t lastWebPreset = 0;            // Dernier preset web chargé
+uint8_t webPresetCount = 0;           // Nombre de presets web sauvegardés
+
+WebPreset webPresets[MAX_WEB_PRESETS];
 
 // Définition du tableau de LEDs pour FastLED
 CRGB leds[NUM_LEDS];
@@ -641,6 +691,15 @@ void updateRGBWithDimmer() {
 // Les liens des contrôles sont maintenant lus dynamiquement depuis le preset actuel
 // Si un paramètre de lien vaut 0, le contrôle correspondant est désactivé
 void handlePhysicalControls() {
+  // Vérifier si on est en mode web (preset 0)
+  if (selectedPreset == 0) {
+    webModeActive = true;
+    handleWebPhysicalControls();
+    return;
+  } else {
+    webModeActive = false;
+  }
+  
   // Lecture stabilisée des capteurs IR
   int stabilizedIR1 = readStabilizedIRSensor(DIST_SENSOR_1_PIN, irBuffer1, irIndex1, irSum1, irInitialized1);
   int stabilizedIR2 = readStabilizedIRSensor(DIST_SENSOR_2_PIN, irBuffer2, irIndex2, irSum2, irInitialized2);
@@ -1200,6 +1259,11 @@ void handleEncoder() {
   
   // Si le preset a changé
   if (newPreset != selectedPreset) {
+    // Sauvegarder l'état web si on quitte le preset 0
+    if (selectedPreset == 0 && webModeActive) {
+      saveWebStateToPreset0();
+    }
+    
     selectedPreset = newPreset;
     
     // Réinitialiser la transposition lors du changement de preset
@@ -1207,6 +1271,11 @@ void handleEncoder() {
     
     // Charger le preset sélectionné
     loadPreset(selectedPreset);
+    
+    // Si on revient au preset 0, charger l'état web
+    if (selectedPreset == 0) {
+      loadWebStateFromPreset0();
+    }
     
     // Pas besoin d'updateGateThresholdWithTranspose() car transpose = 0
     
@@ -1370,6 +1439,9 @@ void setup()
     if (i < 5) Serial.print(":");
   }
   Serial.println();
+  
+  // Initialisation de l'interface web
+  setupWebInterface();
   
 
   Serial.println("Fréquence d'émission: " + String(EMISSION_FREQUENCY) + "Hz");
@@ -1556,7 +1628,8 @@ void loop()
   // Gestion des boutons push
   handleButtonInterrupts();
   
-
+  // Gestion du serveur web
+  webServer.handleClient();
   
   // Gestion de l'encodeur KY-040
  // handleEncoder();
@@ -1573,3 +1646,788 @@ void loop()
   
   delay(1); // Petit délai pour éviter de surcharger le CPU
 }
+
+// ============================================================================
+// IMPLÉMENTATION DES FONCTIONS DE L'INTERFACE WEB
+// ============================================================================
+
+// Initialisation du système de fichiers et du serveur web
+void setupWebInterface() {
+  // Initialiser le système de fichiers
+  Serial.println("🔧 Initialisation de LittleFS...");
+  if (!LittleFS.begin(true)) {
+    Serial.println("❌ Erreur: Impossible d'initialiser LittleFS");
+    return;
+  }
+  Serial.println("✅ LittleFS initialisé avec succès");
+  
+  // Lister les fichiers disponibles
+  File root = LittleFS.open("/");
+  File file = root.openNextFile();
+  Serial.println("📁 Fichiers disponibles dans LittleFS:");
+  while (file) {
+    Serial.print("  - ");
+    Serial.print(file.name());
+    Serial.print(" (");
+    Serial.print(file.size());
+    Serial.println(" bytes)");
+    file = root.openNextFile();
+  }
+  
+  // Créer le point d'accès WiFi
+  WiFi.softAP(AP_SSID, AP_PASSWORD);
+  Serial.print("📡 Point d'accès WiFi créé: ");
+  Serial.println(AP_SSID);
+  Serial.print("🔑 Mot de passe: ");
+  Serial.println(AP_PASSWORD);
+  Serial.print("🌐 Adresse IP: ");
+  Serial.println(WiFi.softAPIP());
+  
+  // Configurer les routes du serveur web
+  setupWebRoutes();
+  
+  // Démarrer le serveur web
+  webServer.begin();
+  Serial.println("🌐 Serveur web démarré");
+  
+  // Charger les presets web et assignations
+  loadWebPresets();
+  loadWebAssignments();
+}
+
+// Configuration des routes du serveur web
+void setupWebRoutes() {
+  // Redirection automatique de la racine vers l'interface web
+  webServer.on("/", HTTP_GET, []() {
+    webServer.sendHeader("Location", "/web", true);
+    webServer.send(302, "text/plain", "Redirection vers l'interface web...");
+  });
+  
+  // Route de test simple (pour vérifier que le serveur fonctionne)
+  webServer.on("/test", HTTP_GET, []() {
+    String html = "<!DOCTYPE html><html><body>";
+    html += "<h1>Test DMX Controller</h1>";
+    html += "<p>Le serveur web fonctionne !</p>";
+    html += "<p>Fichiers LittleFS:</p><ul>";
+    
+    File root = LittleFS.open("/");
+    File file = root.openNextFile();
+    while (file) {
+      html += "<li>" + String(file.name()) + " (" + String(file.size()) + " bytes)</li>";
+      file = root.openNextFile();
+    }
+    html += "</ul>";
+    html += "<p><a href='/web'>Interface web intégrée</a></p>";
+    html += "</body></html>";
+    
+    webServer.send(200, "text/html", html);
+  });
+  
+  // Interface web intégrée (solution de secours)
+  webServer.on("/web", HTTP_GET, handleWebInterface);
+  
+  // Gestion des fichiers statiques
+  webServer.serveStatic("/", LittleFS, "/");
+  
+  // API pour récupérer les paramètres
+  webServer.on("/api/parameters", HTTP_GET, handleGetParameters);
+  
+  // API pour mettre à jour un paramètre
+  webServer.on("/api/parameters", HTTP_POST, handleUpdateParameter);
+  
+  // API pour récupérer les assignations
+  webServer.on("/api/assignments", HTTP_GET, handleGetAssignments);
+  
+  // API pour mettre à jour les assignations
+  webServer.on("/api/assignments", HTTP_POST, handleUpdateAssignments);
+  
+  // API pour sauvegarder un preset web
+  webServer.on("/api/save-preset", HTTP_POST, handleSaveWebPreset);
+  
+  // API pour charger un preset web
+  webServer.on("/api/load-preset", HTTP_POST, handleLoadWebPreset);
+  
+  // API pour lister les presets web
+  webServer.on("/api/presets", HTTP_GET, handleListWebPresets);
+  
+  // Gestion des erreurs 404
+  webServer.onNotFound(handleNotFound);
+}
+
+
+
+// API: Récupérer les paramètres
+void handleGetParameters() {
+  DynamicJsonDocument doc(1024);
+  JsonArray paramsArray = doc.createNestedArray("parameters");
+  
+  // Envoyer les 21 paramètres audio principaux (0-20)
+  for (int i = 0; i < 21; i++) {
+    paramsArray.add(parameters[i].value);
+  }
+  
+  String response;
+  serializeJson(doc, response);
+  webServer.send(200, "application/json", response);
+}
+
+// API: Mettre à jour un paramètre
+void handleUpdateParameter() {
+  if (webServer.hasArg("plain")) {
+    DynamicJsonDocument doc(512);
+    deserializeJson(doc, webServer.arg("plain"));
+    
+    int id = doc["id"];
+    int value = doc["value"];
+    
+    if (id >= 0 && id < 21 && value >= 0 && value <= 255) {
+      parameters[id].value = value;
+      dmxValues[parameters[id].dmxChannel - 1] = value;
+      
+      DynamicJsonDocument response(128);
+      response["success"] = true;
+      response["message"] = "Paramètre mis à jour";
+      
+      String responseStr;
+      serializeJson(response, responseStr);
+      webServer.send(200, "application/json", responseStr);
+    } else {
+      webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Paramètres invalides\"}");
+    }
+  } else {
+    webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Données manquantes\"}");
+  }
+}
+
+// API: Récupérer les assignations
+void handleGetAssignments() {
+  DynamicJsonDocument doc(512);
+  JsonArray assignmentsArray = doc.createNestedArray("assignments");
+  
+  for (int i = 0; i < 4; i++) {
+    assignmentsArray.add(webAssignments[i]);
+  }
+  
+  String response;
+  serializeJson(doc, response);
+  webServer.send(200, "application/json", response);
+}
+
+// API: Mettre à jour les assignations
+void handleUpdateAssignments() {
+  if (webServer.hasArg("plain")) {
+    DynamicJsonDocument doc(512);
+    deserializeJson(doc, webServer.arg("plain"));
+    
+    int index = doc["index"];
+    int value = doc["value"];
+    
+    if (index >= 0 && index < 4 && value >= 0 && value <= 21) {
+      webAssignments[index] = value;
+      saveWebAssignments();
+      
+      DynamicJsonDocument response(128);
+      response["success"] = true;
+      response["message"] = "Assignation mise à jour";
+      
+      String responseStr;
+      serializeJson(response, responseStr);
+      webServer.send(200, "application/json", responseStr);
+    } else {
+      webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Paramètres invalides\"}");
+    }
+  } else {
+    webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Données manquantes\"}");
+  }
+}
+
+// API: Sauvegarder un preset web
+void handleSaveWebPreset() {
+  if (webServer.hasArg("plain")) {
+    DynamicJsonDocument doc(2048);
+    deserializeJson(doc, webServer.arg("plain"));
+    
+    const char* name = doc["name"];
+    JsonArray values = doc["values"];
+    
+    if (webPresetCount < MAX_WEB_PRESETS && values.size() == 21) {
+      strcpy(webPresets[webPresetCount].name, name);
+      
+      for (int i = 0; i < 21; i++) {
+        webPresets[webPresetCount].values[i] = values[i];
+      }
+      
+      webPresetCount++;
+      saveWebPresets();
+      
+      DynamicJsonDocument response(128);
+      response["success"] = true;
+      response["message"] = "Preset sauvegardé";
+      
+      String responseStr;
+      serializeJson(response, responseStr);
+      webServer.send(200, "application/json", responseStr);
+    } else {
+      webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Impossible de sauvegarder\"}");
+    }
+  } else {
+    webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Données manquantes\"}");
+  }
+}
+
+// API: Charger un preset web
+void handleLoadWebPreset() {
+  if (webServer.hasArg("plain")) {
+    DynamicJsonDocument doc(512);
+    deserializeJson(doc, webServer.arg("plain"));
+    
+    int id = doc["id"];
+    
+    if (id >= 0 && id < webPresetCount) {
+      // Appliquer les valeurs du preset
+      for (int i = 0; i < 21; i++) {
+        parameters[i].value = webPresets[id].values[i];
+        dmxValues[parameters[i].dmxChannel - 1] = webPresets[id].values[i];
+      }
+      
+      lastWebPreset = id;
+      
+      DynamicJsonDocument response(1024);
+      response["success"] = true;
+      response["message"] = "Preset chargé";
+      
+      JsonArray paramsArray = response.createNestedArray("parameters");
+      for (int i = 0; i < 21; i++) {
+        paramsArray.add(webPresets[id].values[i]);
+      }
+      
+      String responseStr;
+      serializeJson(response, responseStr);
+      webServer.send(200, "application/json", responseStr);
+    } else {
+      webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Preset invalide\"}");
+    }
+  } else {
+    webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Données manquantes\"}");
+  }
+}
+
+// API: Lister les presets web
+void handleListWebPresets() {
+  DynamicJsonDocument doc(2048);
+  JsonArray presetsArray = doc.createNestedArray("presets");
+  
+  for (int i = 0; i < webPresetCount; i++) {
+    JsonObject preset = presetsArray.createNestedObject();
+    preset["name"] = webPresets[i].name;
+    preset["id"] = i;
+  }
+  
+  String response;
+  serializeJson(doc, response);
+  webServer.send(200, "application/json", response);
+}
+
+// Gestion des erreurs 404
+void handleNotFound() {
+  String path = webServer.uri();
+  Serial.print("❌ 404 - Page non trouvée: ");
+  Serial.println(path);
+  
+  // Vérifier si le fichier existe dans LittleFS
+  if (LittleFS.exists(path)) {
+    Serial.println("  ⚠️  Le fichier existe dans LittleFS mais n'a pas pu être servi");
+  } else {
+    Serial.println("  ❌ Le fichier n'existe pas dans LittleFS");
+  }
+  
+  String response = "Page non trouvée: " + path;
+  response += "\n\nFichiers disponibles:\n";
+  
+  // Lister les fichiers disponibles
+  File root = LittleFS.open("/");
+  File file = root.openNextFile();
+  while (file) {
+    response += "- " + String(file.name()) + "\n";
+    file = root.openNextFile();
+  }
+  
+  webServer.send(404, "text/plain", response);
+}
+
+// Interface web intégrée complète
+void handleWebInterface() {
+  // CSS et structure HTML
+  String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'>";
+  html += "<meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+  html += "<title>Controleur DMX - Interface Web</title>";
+  
+  // CSS amélioré avec faders verticaux
+  html += "<style>";
+  html += "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');";
+  html += ":root{--bg-color:#121212;--surface-color:#1e1e1e;--primary-color:#03A9F4;--primary-color-hover:#4fc3f7;--text-color:#e0e0e0;--text-color-secondary:#8a8a8a;--border-color:#333333;--border-radius:8px}";
+  html += "*{box-sizing:border-box;margin:0;padding:0}";
+  html += "body{font-family:'Inter',sans-serif;background-color:var(--bg-color);color:var(--text-color);padding:1rem;display:flex;justify-content:center}";
+  html += ".main-container{width:100%;max-width:1200px;display:flex;flex-direction:column;gap:1.5rem}";
+  
+  // En-tête
+  html += "header{text-align:center;border-bottom:1px solid var(--border-color);padding-bottom:1rem}";
+  html += "header h1{font-size:1.8rem;font-weight:700;color:var(--primary-color)}";
+  
+  // Sections génériques
+  html += ".card{background-color:var(--surface-color);border-radius:var(--border-radius);padding:1.5rem;border:1px solid var(--border-color)}";
+  html += ".card h2{font-size:1.2rem;font-weight:500;margin-bottom:1.2rem;color:var(--text-color-secondary);text-transform:uppercase;letter-spacing:1px}";
+  
+  // Section Presets avec boutons S1-S8 et L1-L8
+  html += ".presets-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(40px,1fr));gap:0.5rem}";
+  html += ".presets-grid .preset-group{margin-bottom:0.5rem}";
+  html += ".presets-grid label{display:block;font-size:0.8rem;color:var(--text-color-secondary);margin-bottom:0.5rem;text-align:center}";
+  html += ".preset-buttons{display:grid;grid-template-columns:repeat(8,1fr);gap:0.5rem}";
+  html += ".btn{padding:0.75rem 0.5rem;border:none;border-radius:6px;font-weight:500;cursor:pointer;transition:all 0.2s ease-in-out;font-size:0.9rem}";
+  html += ".btn-save{background-color:transparent;border:1px solid var(--primary-color);color:var(--primary-color)}";
+  html += ".btn-save:hover{background-color:var(--primary-color);color:var(--bg-color)}";
+  html += ".btn-load{background-color:var(--primary-color);color:var(--bg-color)}";
+  html += ".btn-load:hover{background-color:var(--primary-color-hover)}";
+  
+  // Section Assignations
+  html += ".assignments-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}";
+  html += ".assignment-control{display:flex;flex-direction:column}";
+  html += ".assignment-control label{margin-bottom:0.5rem;font-weight:500}";
+  html += ".custom-select{appearance:none;background-color:#333;border:1px solid var(--border-color);padding:0.75rem;border-radius:6px;color:var(--text-color);cursor:pointer;width:100%}";
+  
+  // Section Paramètres avec sliders horizontaux
+  html += ".params-grid{display:grid;grid-template-columns:1fr;gap:1.5rem}";
+  html += ".param-control{display:flex;flex-direction:column}";
+  html += ".param-label-wrapper{display:flex;justify-content:space-between;margin-bottom:0.5rem}";
+  html += ".param-label-wrapper .param-name{font-weight:500}";
+  html += ".param-label-wrapper .param-value{font-family:monospace;background-color:#333;padding:0.1rem 0.4rem;border-radius:4px;font-size:0.9rem}";
+  html += ".slider{-webkit-appearance:none;appearance:none;width:100%;height:8px;background:#333;outline:none;border-radius:4px;cursor:pointer}";
+  html += ".slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;background:var(--primary-color);border-radius:50%;transition:background-color 0.2s}";
+  html += ".slider::-moz-range-thumb{width:20px;height:20px;background:var(--primary-color);border-radius:50%;border:none;transition:background-color 0.2s}";
+  html += ".slider:hover::-webkit-slider-thumb{background:var(--primary-color-hover)}";
+  html += ".slider:hover::-moz-range-thumb{background:var(--primary-color-hover)}";
+  
+  // Statut
+  html += ".status{text-align:center;margin-top:25px;padding:16px;border-radius:12px;background:rgba(76,175,80,0.2);font-weight:600;border:1px solid rgba(76,175,80,0.3);box-shadow:0 4px 15px rgba(0,0,0,0.2)}";
+  html += ".status.error{background:rgba(244,67,54,0.2);border-color:rgba(244,67,54,0.3)}";
+  
+  // Media Queries pour la responsivité
+  html += "@media (min-width:600px){.params-grid{grid-template-columns:repeat(2,1fr);gap:1rem 2rem}}";
+  html += "@media (min-width:800px){.params-grid{grid-template-columns:repeat(3,1fr)}}";
+  html += "</style></head><body>";
+  
+  html += "<div class='main-container'>";
+  html += "<header>";
+  html += "<h1>Contrôleur DMX ESP32</h1>";
+  html += "</header>";
+
+  // Section Presets avec boutons S1-S8 et L1-L8
+  html += "<section id='presets' class='card'>";
+  html += "<h2>Presets</h2>";
+  html += "<div class='presets-grid'>";
+  html += "<div class='preset-group'>";
+  html += "<label>Sauvegarder</label>";
+  html += "<div id='save-presets-container' class='preset-buttons'>";
+  html += "</div>";
+  html += "</div>";
+  html += "<div class='preset-group'>";
+  html += "<label>Charger</label>";
+  html += "<div id='load-presets-container' class='preset-buttons'>";
+  html += "</div>";
+  html += "</div>";
+  html += "</div>";
+  html += "</section>";
+
+  // Section Assignations
+  html += "<section id='assignments' class='card'>";
+  html += "<h2>Assignations Physiques</h2>";
+  html += "<div id='assignments-container' class='assignments-grid'>";
+  html += "</div>";
+  html += "</section>";
+
+  // Section Paramètres
+  html += "<section id='parameters' class='card'>";
+  html += "<h2>Paramètres</h2>";
+  html += "<div id='params-container' class='params-grid'>";
+  html += "</div>";
+  html += "</section>";
+  
+  html += "<div class='status' id='status'>✅ Prêt - Connecté au contrôleur DMX</div>";
+  html += "</div>";
+  
+  // JavaScript adapté du design de l'utilisateur
+  html += "<script>";
+  html += "document.addEventListener('DOMContentLoaded', () => {";
+  html += "// --- CONFIGURATION ---";
+  html += "const PARAM_COUNT = 21;";
+  html += "const PRESET_COUNT = 8;";
+  html += "const ASSIGNMENT_CONTROLS = ['Capteur IR 1', 'Capteur IR 2', 'Fader 2', 'Fader 3'];";
+  
+  // Noms des paramètres
+  html += "const paramNames = [";
+  html += "'Autopan Depth', 'Pitch', 'Vibrato Speed', 'Vibrato Depth', 'Delay Time', 'Delay Feedback',";
+  html += "'OSC Waveform', 'Gate Threshold', 'Portamento Time', 'Scale', 'Octave Low/High',";
+  html += "'OSC 2 Volume', 'OSC 2 Pitch Offset', 'Autopan Frequency', 'Scale Tonic',";
+  html += "'Volume Drums', 'Trig Kick', 'Trig Snare', 'Trig HH', 'Master Volume', 'Filter On/Off'";
+  html += "];";
+  
+  // --- RÉFÉRENCES DOM ---
+  html += "const savePresetsContainer = document.getElementById('save-presets-container');";
+  html += "const loadPresetsContainer = document.getElementById('load-presets-container');";
+  html += "const assignmentsContainer = document.getElementById('assignments-container');";
+  html += "const paramsContainer = document.getElementById('params-container');";
+  
+  // --- FONCTIONS API ---
+  html += "function updateParameter(paramId, value) {";
+  html += "fetch('/api/parameters', {";
+  html += "method: 'POST',";
+  html += "headers: {'Content-Type': 'application/json'},";
+  html += "body: JSON.stringify({id: parseInt(paramId), value: parseInt(value)})";
+  html += "})";
+  html += ".then(r => r.json())";
+  html += ".then(d => showStatus(d.success ? '✅ Paramètre mis à jour' : '❌ Erreur paramètre'))";
+  html += ".catch(e => showStatus('❌ Erreur de connexion'));";
+  html += "}";
+  
+  html += "function updateAssignment(assignId, value) {";
+  html += "fetch('/api/assignments', {";
+  html += "method: 'POST',";
+  html += "headers: {'Content-Type': 'application/json'},";
+  html += "body: JSON.stringify({index: parseInt(assignId), value: parseInt(value)})";
+  html += "})";
+  html += ".then(r => r.json())";
+  html += ".then(d => showStatus(d.success ? '✅ Assignation mise à jour' : '❌ Erreur assignation'))";
+  html += ".catch(e => showStatus('❌ Erreur de connexion'));";
+  html += "}";
+  
+  html += "function savePreset(presetId) {";
+  html += "fetch('/api/save-preset', {";
+  html += "method: 'POST',";
+  html += "headers: {'Content-Type': 'application/json'},";
+  html += "body: JSON.stringify({id: parseInt(presetId), name: `Preset ${presetId}`})";
+  html += "})";
+  html += ".then(r => r.json())";
+  html += ".then(d => showStatus(d.success ? `✅ Preset ${presetId} sauvegardé` : '❌ Erreur sauvegarde'))";
+  html += ".catch(e => showStatus('❌ Erreur de connexion'));";
+  html += "}";
+  
+  html += "function loadPreset(presetId) {";
+  html += "fetch('/api/load-preset', {";
+  html += "method: 'POST',";
+  html += "headers: {'Content-Type': 'application/json'},";
+  html += "body: JSON.stringify({id: parseInt(presetId)})";
+  html += "})";
+  html += ".then(r => r.json())";
+  html += ".then(d => {";
+  html += "if (d.success) {";
+  html += "loadCurrentParams();";
+  html += "showStatus(`✅ Preset ${presetId} chargé`);";
+  html += "} else showStatus('❌ Erreur chargement');";
+  html += "})";
+  html += ".catch(e => showStatus('❌ Erreur de connexion'));";
+  html += "}";
+  
+  html += "function loadCurrentParams() {";
+  html += "fetch('/api/parameters')";
+  html += ".then(r => r.json())";
+  html += ".then(d => {";
+  html += "d.parameters.forEach((value, index) => {";
+  html += "if (index < PARAM_COUNT) {";
+  html += "const slider = document.getElementById(`param-${index}`);";
+  html += "const valueDisplay = document.getElementById(`param-${index}-value`);";
+  html += "if (slider && valueDisplay) {";
+  html += "slider.value = value;";
+  html += "valueDisplay.textContent = value;";
+  html += "}";
+  html += "}";
+  html += "});";
+  html += "})";
+  html += ".catch(e => console.error('Erreur chargement paramètres:', e));";
+  html += "}";
+  
+  html += "function loadCurrentAssignments() {";
+  html += "fetch('/api/assignments')";
+  html += ".then(r => r.json())";
+  html += ".then(d => {";
+  html += "d.assignments.forEach((value, index) => {";
+  html += "const select = document.getElementById(`assign-${index}`);";
+  html += "if (select) select.value = value;";
+  html += "});";
+  html += "})";
+  html += ".catch(e => console.error('Erreur chargement assignations:', e));";
+  html += "}";
+  
+  html += "function showStatus(message) {";
+  html += "const status = document.getElementById('status');";
+  html += "status.textContent = message;";
+  html += "status.className = message.includes('❌') ? 'status error' : 'status';";
+  html += "setTimeout(() => {";
+  html += "status.textContent = '✅ Prêt - Connecté au Ksoloti Kontrol';";
+  html += "status.className = 'status';";
+  html += "}, 3000);";
+  html += "}";
+  
+  // --- GÉNÉRATION DYNAMIQUE DES CONTRÔLES ---
+  // 1. Générer les boutons de Presets S1-S8 et L1-L8
+  html += "for (let i = 1; i <= PRESET_COUNT; i++) {";
+  html += "// Bouton Sauvegarder";
+  html += "const saveBtn = document.createElement('button');";
+  html += "saveBtn.className = 'btn btn-save';";
+  html += "saveBtn.textContent = `S${i}`;";
+  html += "saveBtn.dataset.presetId = i;";
+  html += "saveBtn.addEventListener('click', () => {";
+  html += "savePreset(i);";
+  html += "});";
+  html += "savePresetsContainer.appendChild(saveBtn);";
+  html += "// Bouton Charger";
+  html += "const loadBtn = document.createElement('button');";
+  html += "loadBtn.className = 'btn btn-load';";
+  html += "loadBtn.textContent = `L${i}`;";
+  html += "loadBtn.dataset.presetId = i;";
+  html += "loadBtn.addEventListener('click', () => {";
+  html += "loadPreset(i);";
+  html += "});";
+  html += "loadPresetsContainer.appendChild(loadBtn);";
+  html += "}";
+  
+  // 2. Générer les options pour les menus déroulants
+  html += "const paramOptionsHTML = (() => {";
+  html += "let html = '<option value=\"-1\">OFF</option>';";
+  html += "for (let i = 0; i < PARAM_COUNT; i++) {";
+  html += "html += `<option value=\"${i}\">${paramNames[i] || `Param ${i + 1}`}</option>`;";
+  html += "}";
+  html += "return html;";
+  html += "})();";
+  
+  // 3. Générer les contrôles d'Assignation
+  html += "ASSIGNMENT_CONTROLS.forEach((name, index) => {";
+  html += "const controlId = `assign-${index}`;";
+  html += "const controlHTML = `";
+  html += "<div class=\"assignment-control\">";
+  html += "<label for=\"${controlId}\">${name}</label>";
+  html += "<select id=\"${controlId}\" class=\"custom-select\" data-assign-id=\"${index}\">";
+  html += "${paramOptionsHTML}";
+  html += "</select>";
+  html += "</div>";
+  html += "`;";
+  html += "assignmentsContainer.innerHTML += controlHTML;";
+  html += "});";
+  
+  // Ajouter les écouteurs d'événements après la création
+  html += "assignmentsContainer.querySelectorAll('.custom-select').forEach(select => {";
+  html += "select.addEventListener('change', (event) => {";
+  html += "updateAssignment(event.target.dataset.assignId, event.target.value);";
+  html += "});";
+  html += "});";
+  
+  // 4. Générer les Sliders de Paramètres
+  html += "for (let i = 0; i < PARAM_COUNT; i++) {";
+  html += "const paramId = `param-${i}`;";
+  html += "const paramName = paramNames[i] || `Paramètre ${i + 1}`;";
+  html += "const initialValue = 128; // Valeur par défaut";
+  html += "const controlHTML = `";
+  html += "<div class=\"param-control\">";
+  html += "<div class=\"param-label-wrapper\">";
+  html += "<span class=\"param-name\">${paramName}</span>";
+  html += "<span id=\"${paramId}-value\" class=\"param-value\">${initialValue}</span>";
+  html += "</div>";
+  html += "<input type=\"range\" id=\"${paramId}\" class=\"slider\" min=\"0\" max=\"255\" value=\"${initialValue}\" data-param-id=\"${i}\">";
+  html += "</div>";
+  html += "`;";
+  html += "paramsContainer.innerHTML += controlHTML;";
+  html += "}";
+  
+  // Ajouter les écouteurs d'événements après la création
+  html += "paramsContainer.querySelectorAll('.slider').forEach(slider => {";
+  html += "const valueDisplay = document.getElementById(`${slider.id}-value`);";
+  html += "slider.addEventListener('input', (event) => {";
+  html += "valueDisplay.textContent = event.target.value;";
+  html += "});";
+  html += "slider.addEventListener('change', (event) => {";
+  html += "updateParameter(event.target.dataset.paramId, event.target.value);";
+  html += "});";
+  html += "});";
+  
+  // Charger les données initiales
+  html += "loadCurrentParams();";
+  html += "loadCurrentAssignments();";
+  html += "});";
+  html += "</script></body></html>";
+  
+  webServer.send(200, "text/html", html);
+}
+
+// Sauvegarde des presets web dans LittleFS
+void saveWebPresets() {
+  File file = LittleFS.open("/web_presets.json", "w");
+  if (file) {
+    DynamicJsonDocument doc(4096);
+    JsonArray presetsArray = doc.createNestedArray("presets");
+    
+    for (int i = 0; i < webPresetCount; i++) {
+      JsonObject preset = presetsArray.createNestedObject();
+      preset["name"] = webPresets[i].name;
+      
+      JsonArray valuesArray = preset.createNestedArray("values");
+      for (int j = 0; j < 21; j++) {
+        valuesArray.add(webPresets[i].values[j]);
+      }
+    }
+    
+    serializeJson(doc, file);
+    file.close();
+    Serial.println("💾 Presets web sauvegardés");
+  }
+}
+
+// Chargement des presets web depuis LittleFS
+void loadWebPresets() {
+  File file = LittleFS.open("/web_presets.json", "r");
+  if (file) {
+    DynamicJsonDocument doc(4096);
+    deserializeJson(doc, file);
+    file.close();
+    
+    JsonArray presetsArray = doc["presets"];
+    webPresetCount = 0;
+    
+    for (JsonObject preset : presetsArray) {
+      if (webPresetCount < MAX_WEB_PRESETS) {
+        strcpy(webPresets[webPresetCount].name, preset["name"]);
+        
+        JsonArray valuesArray = preset["values"];
+        int i = 0;
+        for (JsonVariant value : valuesArray) {
+          if (i < 21) {
+            webPresets[webPresetCount].values[i] = value;
+            i++;
+          }
+        }
+        
+        webPresetCount++;
+      }
+    }
+    
+    Serial.print("📂 ");
+    Serial.print(webPresetCount);
+    Serial.println(" presets web chargés");
+  }
+}
+
+// Sauvegarde des assignations dans LittleFS
+void saveWebAssignments() {
+  File file = LittleFS.open("/web_assignments.json", "w");
+  if (file) {
+    DynamicJsonDocument doc(512);
+    JsonArray assignmentsArray = doc.createNestedArray("assignments");
+    
+    for (int i = 0; i < 4; i++) {
+      assignmentsArray.add(webAssignments[i]);
+    }
+    
+    serializeJson(doc, file);
+    file.close();
+    Serial.println("💾 Assignations web sauvegardées");
+  }
+}
+
+// Chargement des assignations depuis LittleFS
+void loadWebAssignments() {
+  File file = LittleFS.open("/web_assignments.json", "r");
+  if (file) {
+    DynamicJsonDocument doc(512);
+    deserializeJson(doc, file);
+    file.close();
+    
+    JsonArray assignmentsArray = doc["assignments"];
+    int i = 0;
+    for (JsonVariant value : assignmentsArray) {
+      if (i < 4) {
+        webAssignments[i] = value;
+        i++;
+      }
+    }
+    
+    Serial.println("📂 Assignations web chargées");
+  }
+}
+
+// Sauvegarde de l'état web actuel dans le preset 0
+void saveWebStateToPreset0() {
+  if (webModeActive) {
+    // Sauvegarder les 21 paramètres audio principaux dans le preset 0
+    for (int i = 0; i < 21; i++) {
+      presets[0].values[i] = parameters[i].value;
+    }
+    
+    // Sauvegarder les assignations
+    presets[0].values[24] = webAssignments[0]; // IR1
+    presets[0].values[25] = webAssignments[1]; // IR2
+    presets[0].values[27] = webAssignments[2]; // Fader2
+    presets[0].values[28] = webAssignments[3]; // Fader3
+    
+    Serial.println("💾 État web sauvegardé dans le preset 0");
+  }
+}
+
+// Chargement de l'état web depuis le preset 0
+void loadWebStateFromPreset0() {
+  // Charger les 21 paramètres audio principaux depuis le preset 0
+  for (int i = 0; i < 21; i++) {
+    parameters[i].value = presets[0].values[i];
+    dmxValues[parameters[i].dmxChannel - 1] = presets[0].values[i];
+  }
+  
+  // Charger les assignations
+  webAssignments[0] = presets[0].values[24]; // IR1
+  webAssignments[1] = presets[0].values[25]; // IR2
+  webAssignments[2] = presets[0].values[27]; // Fader2
+  webAssignments[3] = presets[0].values[28]; // Fader3
+  
+  // Sauvegarder les assignations web
+  saveWebAssignments();
+  
+  Serial.println("📂 État web chargé depuis le preset 0");
+}
+
+// Gestion des contrôles physiques en mode web
+void handleWebPhysicalControls() {
+  // Lecture stabilisée des capteurs IR
+  int stabilizedIR1 = readStabilizedIRSensor(DIST_SENSOR_1_PIN, irBuffer1, irIndex1, irSum1, irInitialized1);
+  int stabilizedIR2 = readStabilizedIRSensor(DIST_SENSOR_2_PIN, irBuffer2, irIndex2, irSum2, irInitialized2);
+  uint8_t ir1Value = mapIR1Logarithmic(stabilizedIR1);
+  uint8_t ir2Value = stabilizedIR2 / 16;
+  
+  // Lecture des faders
+  uint8_t fader2Value = (4095 - analogRead(FADER_2_PIN)) / 16;
+  uint8_t fader3Value = (4095 - analogRead(FADER_3_PIN)) / 16;
+  
+  // IR1
+  if (webAssignments[0] > 0 && webAssignments[0] <= 21) {
+    int paramIndex = webAssignments[0] - 1;
+    parameters[paramIndex].value = ir1Value;
+    dmxValues[parameters[paramIndex].dmxChannel - 1] = ir1Value;
+  }
+  
+  // IR2
+  if (webAssignments[1] > 0 && webAssignments[1] <= 21) {
+    int paramIndex = webAssignments[1] - 1;
+    parameters[paramIndex].value = ir2Value;
+    dmxValues[parameters[paramIndex].dmxChannel - 1] = ir2Value;
+  }
+  
+  // Fader2
+  if (webAssignments[2] > 0 && webAssignments[2] <= 21) {
+    int paramIndex = webAssignments[2] - 1;
+    parameters[paramIndex].value = fader2Value;
+    dmxValues[parameters[paramIndex].dmxChannel - 1] = fader2Value;
+  }
+  
+  // Fader3
+  if (webAssignments[3] > 0 && webAssignments[3] <= 21) {
+    int paramIndex = webAssignments[3] - 1;
+    parameters[paramIndex].value = fader3Value;
+    dmxValues[parameters[paramIndex].dmxChannel - 1] = fader3Value;
+  }
+}
+

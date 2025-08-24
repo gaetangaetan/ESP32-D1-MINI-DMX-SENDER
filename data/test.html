@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test DMX Controller</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>🎛️ Test Contrôleur DMX</h1>
+    <p>Si vous voyez cette page, le serveur web fonctionne !</p>
+    <p>L'interface principale est disponible sur <a href="/index.html">/index.html</a></p>
+    
+    <h2>Test des API</h2>
+    <button onclick="testAPI()">Tester l'API des paramètres</button>
+    <div id="result"></div>
+    
+    <script>
+        function testAPI() {
+            fetch('/api/parameters')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('result').innerHTML = 
+                        '<h3>Réponse API :</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                })
+                .catch(error => {
+                    document.getElementById('result').innerHTML = 
+                        '<h3>Erreur :</h3><pre>' + error.message + '</pre>';
+                });
+        }
+    </script>
+</body>
+</html>
