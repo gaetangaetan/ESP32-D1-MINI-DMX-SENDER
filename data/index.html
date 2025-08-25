@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ksoloti Kontrol v012</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="main-container">
+        <header>
+            <h1>Ksoloti Kontrol v012</h1>
+            <div class="view-toggle">
+                <button id="liveViewBtn" class="view-btn active">LIVE CONTROL</button>
+                <button id="configViewBtn" class="view-btn">CONFIG</button>
+            </div>
+        </header>
+
+        <!-- Vue LIVE CONTROL -->
+        <div id="liveView" class="view active">
+            <section id="octaves" class="card">
+                <h2>Octaves</h2>
+                <div class="octave-controls">
+                    <button id="octave-down" class="btn btn-load">OCT-</button>
+                    <span id="octave-display" class="octave-value">0</span>
+                    <button id="octave-up" class="btn btn-load">OCT+</button>
+                </div>
+            </section>
+            
+            <section id="parameters" class="card">
+                <h2>Paramètres Live</h2>
+                <div class="params-grid" id="paramsGrid">
+                    <!-- Généré dynamiquement par JavaScript -->
+                </div>
+            </section>
+        </div>
+
+        <!-- Vue CONFIG -->
+        <div id="configView" class="view">
+            <!-- Section Presets -->
+            <section id="presets" class="card">
+                <h2>Presets</h2>
+                <div class="presets-grid">
+                    <div class="preset-group">
+                        <label>Sauvegarder</label>
+                        <div id="savePresetsContainer" class="preset-buttons">
+                            <!-- Généré dynamiquement par JavaScript -->
+                        </div>
+                    </div>
+                    <div class="preset-group">
+                        <label>Charger</label>
+                        <div id="loadPresetsContainer" class="preset-buttons">
+                            <!-- Généré dynamiquement par JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section Assignations -->
+            <section id="assignments" class="card">
+                <h2>Assignations Physiques</h2>
+                <div class="assignments-grid" id="assignmentsGrid">
+                    <!-- Généré dynamiquement par JavaScript -->
+                </div>
+            </section>
+        </div>
+
+        <!-- Zone de statut -->
+        <div id="status" class="status"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

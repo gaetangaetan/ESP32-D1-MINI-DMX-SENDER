@@ -111,7 +111,7 @@ typedef struct {
 // Fonctions de l'interface web
 void setupWebInterface();
 void setupWebRoutes();
-void handleWebInterface();
+
 void handleGetParameters();
 void handleUpdateParameter();
 void handleGetAssignments();
@@ -119,6 +119,7 @@ void handleUpdateAssignments();
 void handleSaveWebPreset();
 void handleLoadWebPreset();
 void handleListWebPresets();
+void handleOctave();
 void handleNotFound();
 void saveWebPresets();
 void loadWebPresets();
@@ -126,6 +127,8 @@ void saveWebAssignments();
 void loadWebAssignments();
 void saveWebStateToPreset0();
 void loadWebStateFromPreset0();
+void saveWebStateToPreset0();
+void resetWebParameters();
 void handleWebPhysicalControls();
 
 // Création des objets
@@ -140,6 +143,7 @@ bool webModeActive = false;           // True si le preset 0 (web) est actif
 uint8_t webAssignments[4] = {0, 0, 0, 0}; // IR1, IR2, Fader2, Fader3 (0 = OFF, 1-21 = paramètre)
 uint8_t lastWebPreset = 0;            // Dernier preset web chargé
 uint8_t webPresetCount = 0;           // Nombre de presets web sauvegardés
+int8_t webOctave = 0;                 // Octave web (indépendante de la transposition)
 
 WebPreset webPresets[MAX_WEB_PRESETS];
 
@@ -695,7 +699,7 @@ void handlePhysicalControls() {
   if (selectedPreset == 0) {
     webModeActive = true;
     handleWebPhysicalControls();
-    return;
+    return; // IMPORTANT: Arrêter complètement l'exécution ici
   } else {
     webModeActive = false;
   }
@@ -979,7 +983,7 @@ Targets : (0=IR1, 1=IR2, 2=Fader1, 3=Fader2, 4=Fader3)
 
     // Preset 2 - Classical scale
   //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0, 90,  2, 74, 83,255,155,213,255,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15, 14,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
+  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0, 0,  0,  0,  0);
   savePreset(2, "Classical scale");
 
       // Preset 3 - Classical scale siren
@@ -987,10 +991,10 @@ Targets : (0=IR1, 1=IR2, 2=Fader1, 3=Fader2, 4=Fader3)
   setAllParameters(  0,  0, 100, 3, 74, 83,100,155,213,255,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15, 14,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
   savePreset(3, "Classical scale siren");
 
-      // Preset 0 - Classical
+      // Preset 0 - WEB MODE (pas d'assignations physiques)
   //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0, 59, 16, 74, 83,255,155,213,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15,  2,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
-  savePreset(0, "Classical");
+  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  50,255,0,  50,  0,  0);
+  savePreset(0, "WEB MODE");
 
   // Preset 6 - Buzz1
   //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
@@ -1203,7 +1207,8 @@ void handleButtons() {
 void handleButtonInterrupts() {
   // Traiter les interruptions du bouton 1 (décrémenter transposition)
   if (buttonInterruptFlags[0]) {
-    if (transpose > -12) {
+    // Ne pas traiter la transposition en mode web (preset 0)
+    if (selectedPreset != 0 && transpose > -12) {
       transpose--;
       Serial.print("Bouton 1 - Transposition décrémentée: ");
       Serial.println(transpose);
@@ -1216,13 +1221,16 @@ void handleButtonInterrupts() {
       
       // Mettre à jour le gate_threshold avec la nouvelle transposition
       updateGateThresholdWithTranspose();
+    } else if (selectedPreset == 0) {
+      Serial.println("Bouton 1 - Transposition désactivée en mode web");
     }
     buttonInterruptFlags[0] = false;
   }
   
   // Traiter les interruptions du bouton 2 (incrémenter transposition)
   if (buttonInterruptFlags[1]) {
-    if (transpose < 12) {
+    // Ne pas traiter la transposition en mode web (preset 0)
+    if (selectedPreset != 0 && transpose < 12) {
       transpose++;
       Serial.print("Bouton 2 - Transposition incrémentée: ");
       Serial.println(transpose);
@@ -1235,6 +1243,8 @@ void handleButtonInterrupts() {
       
       // Mettre à jour le gate_threshold avec la nouvelle transposition
       updateGateThresholdWithTranspose();
+    } else if (selectedPreset == 0) {
+      Serial.println("Bouton 2 - Transposition désactivée en mode web");
     }
     buttonInterruptFlags[1] = false;
   }
@@ -1272,9 +1282,9 @@ void handleEncoder() {
     // Charger le preset sélectionné
     loadPreset(selectedPreset);
     
-    // Si on revient au preset 0, charger l'état web
+    // Si on revient au preset 0, réinitialiser les paramètres web
     if (selectedPreset == 0) {
-      loadWebStateFromPreset0();
+      resetWebParameters();
     }
     
     // Pas besoin d'updateGateThresholdWithTranspose() car transpose = 0
@@ -1653,13 +1663,28 @@ void loop()
 
 // Initialisation du système de fichiers et du serveur web
 void setupWebInterface() {
-  // Initialiser le système de fichiers
+  // Initialiser le système de fichiers avec formatage forcé si nécessaire
   Serial.println("🔧 Initialisation de LittleFS...");
   if (!LittleFS.begin(true)) {
-    Serial.println("❌ Erreur: Impossible d'initialiser LittleFS");
-    return;
+    Serial.println("❌ Première tentative échouée, formatage forcé...");
+    LittleFS.format();
+    if (!LittleFS.begin(true)) {
+      Serial.println("❌ Erreur: Impossible d'initialiser LittleFS même après formatage");
+      return;
+    }
   }
   Serial.println("✅ LittleFS initialisé avec succès");
+  
+  // Vérifier que l'écriture fonctionne en créant un fichier de test
+  File testFile = LittleFS.open("/test.txt", "w");
+  if (testFile) {
+    testFile.println("Test d'écriture LittleFS");
+    testFile.close();
+    Serial.println("✅ Test d'écriture LittleFS réussi");
+    LittleFS.remove("/test.txt"); // Nettoyer le fichier de test
+  } else {
+    Serial.println("❌ Erreur: Impossible d'écrire dans LittleFS");
+  }
   
   // Lister les fichiers disponibles
   File root = LittleFS.open("/");
@@ -1691,15 +1716,17 @@ void setupWebInterface() {
   Serial.println("🌐 Serveur web démarré");
   
   // Charger les presets web et assignations
+  Serial.println("🔄 Début du chargement des presets web...");
   loadWebPresets();
+  Serial.println("🔄 Début du chargement des assignations web...");
   loadWebAssignments();
 }
 
 // Configuration des routes du serveur web
 void setupWebRoutes() {
-  // Redirection automatique de la racine vers l'interface web
+  // Redirection automatique de la racine vers index.html
   webServer.on("/", HTTP_GET, []() {
-    webServer.sendHeader("Location", "/web", true);
+    webServer.sendHeader("Location", "/index.html", true);
     webServer.send(302, "text/plain", "Redirection vers l'interface web...");
   });
   
@@ -1717,16 +1744,15 @@ void setupWebRoutes() {
       file = root.openNextFile();
     }
     html += "</ul>";
-    html += "<p><a href='/web'>Interface web intégrée</a></p>";
+
     html += "</body></html>";
     
     webServer.send(200, "text/html", html);
   });
   
-  // Interface web intégrée (solution de secours)
-  webServer.on("/web", HTTP_GET, handleWebInterface);
+
   
-  // Gestion des fichiers statiques
+  // Servir les fichiers statiques depuis LittleFS
   webServer.serveStatic("/", LittleFS, "/");
   
   // API pour récupérer les paramètres
@@ -1750,6 +1776,9 @@ void setupWebRoutes() {
   // API pour lister les presets web
   webServer.on("/api/presets", HTTP_GET, handleListWebPresets);
   
+  // API pour gérer les octaves
+  webServer.on("/api/octave", HTTP_POST, handleOctave);
+  
   // Gestion des erreurs 404
   webServer.onNotFound(handleNotFound);
 }
@@ -1758,16 +1787,28 @@ void setupWebRoutes() {
 
 // API: Récupérer les paramètres
 void handleGetParameters() {
+  Serial.println("📊 GET /api/parameters - Début");
+  
   DynamicJsonDocument doc(1024);
   JsonArray paramsArray = doc.createNestedArray("parameters");
   
   // Envoyer les 21 paramètres audio principaux (0-20)
-  for (int i = 0; i < 21; i++) {
-    paramsArray.add(parameters[i].value);
+  // Si on est en mode web (preset 0), utiliser les valeurs des paramètres
+  // Sinon, utiliser les valeurs du preset actuel
+  if (selectedPreset == 0) {
+    for (int i = 0; i < 21; i++) {
+      paramsArray.add(parameters[i].value);
+    }
+  } else {
+    for (int i = 0; i < 21; i++) {
+      paramsArray.add(presets[selectedPreset].values[i]);
+    }
   }
   
   String response;
   serializeJson(doc, response);
+  
+  Serial.println("📊 GET /api/parameters - Réponse envoyée: " + response);
   webServer.send(200, "application/json", response);
 }
 
@@ -1801,6 +1842,8 @@ void handleUpdateParameter() {
 
 // API: Récupérer les assignations
 void handleGetAssignments() {
+  Serial.println("🔗 GET /api/assignments - Début");
+  
   DynamicJsonDocument doc(512);
   JsonArray assignmentsArray = doc.createNestedArray("assignments");
   
@@ -1810,6 +1853,8 @@ void handleGetAssignments() {
   
   String response;
   serializeJson(doc, response);
+  
+  Serial.println("🔗 GET /api/assignments - Réponse envoyée: " + response);
   webServer.send(200, "application/json", response);
 }
 
@@ -1892,10 +1937,14 @@ void handleLoadWebPreset() {
       
       lastWebPreset = id;
       
+      // Sauvegarder l'état dans le preset 0 pour persistance
+      saveWebStateToPreset0();
+      
       DynamicJsonDocument response(1024);
       response["success"] = true;
       response["message"] = "Preset chargé";
       
+      // Retourner les vraies valeurs des presets web (pas des paramètres actuels)
       JsonArray paramsArray = response.createNestedArray("parameters");
       for (int i = 0; i < 21; i++) {
         paramsArray.add(webPresets[id].values[i]);
@@ -1928,6 +1977,50 @@ void handleListWebPresets() {
   webServer.send(200, "application/json", response);
 }
 
+// API: Gérer les octaves
+void handleOctave() {
+  if (webServer.hasArg("plain")) {
+    DynamicJsonDocument doc(512);
+    deserializeJson(doc, webServer.arg("plain"));
+    
+    String direction = doc["direction"];
+    
+    if (direction == "up" && webOctave < 12) {
+      webOctave++;
+    } else if (direction == "down" && webOctave > -12) {
+      webOctave--;
+    }
+    
+    // Appliquer l'octave si on est en mode web
+    if (selectedPreset == 0 && webModeActive) {
+      // Mettre à jour la transposition globale pour que la logique existante fonctionne
+      transpose = webOctave;
+      
+      // Appliquer la transposition au pitch et au threshold
+      updateGateThresholdWithTranspose();
+      
+      // Afficher la nouvelle transposition sur l'écran
+      displayUnified();
+      
+      Serial.print("Octave web: ");
+      Serial.print(webOctave);
+      Serial.print(" | Transposition appliquée: ");
+      Serial.println(transpose);
+    }
+    
+    DynamicJsonDocument response(256);
+    response["success"] = true;
+    response["octave"] = webOctave;
+    response["message"] = "Octave mise à jour";
+    
+    String responseStr;
+    serializeJson(response, responseStr);
+    webServer.send(200, "application/json", responseStr);
+  } else {
+    webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Données manquantes\"}");
+  }
+}
+
 // Gestion des erreurs 404
 void handleNotFound() {
   String path = webServer.uri();
@@ -1955,307 +2048,8 @@ void handleNotFound() {
   webServer.send(404, "text/plain", response);
 }
 
-// Interface web intégrée complète
-void handleWebInterface() {
-  // CSS et structure HTML
-  String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'>";
-  html += "<meta name='viewport' content='width=device-width, initial-scale=1.0'>";
-  html += "<title>Controleur DMX - Interface Web</title>";
-  
-  // CSS amélioré avec faders verticaux
-  html += "<style>";
-  html += "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');";
-  html += ":root{--bg-color:#121212;--surface-color:#1e1e1e;--primary-color:#03A9F4;--primary-color-hover:#4fc3f7;--text-color:#e0e0e0;--text-color-secondary:#8a8a8a;--border-color:#333333;--border-radius:8px}";
-  html += "*{box-sizing:border-box;margin:0;padding:0}";
-  html += "body{font-family:'Inter',sans-serif;background-color:var(--bg-color);color:var(--text-color);padding:1rem;display:flex;justify-content:center}";
-  html += ".main-container{width:100%;max-width:1200px;display:flex;flex-direction:column;gap:1.5rem}";
-  
-  // En-tête
-  html += "header{text-align:center;border-bottom:1px solid var(--border-color);padding-bottom:1rem}";
-  html += "header h1{font-size:1.8rem;font-weight:700;color:var(--primary-color)}";
-  
-  // Sections génériques
-  html += ".card{background-color:var(--surface-color);border-radius:var(--border-radius);padding:1.5rem;border:1px solid var(--border-color)}";
-  html += ".card h2{font-size:1.2rem;font-weight:500;margin-bottom:1.2rem;color:var(--text-color-secondary);text-transform:uppercase;letter-spacing:1px}";
-  
-  // Section Presets avec boutons S1-S8 et L1-L8
-  html += ".presets-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(40px,1fr));gap:0.5rem}";
-  html += ".presets-grid .preset-group{margin-bottom:0.5rem}";
-  html += ".presets-grid label{display:block;font-size:0.8rem;color:var(--text-color-secondary);margin-bottom:0.5rem;text-align:center}";
-  html += ".preset-buttons{display:grid;grid-template-columns:repeat(8,1fr);gap:0.5rem}";
-  html += ".btn{padding:0.75rem 0.5rem;border:none;border-radius:6px;font-weight:500;cursor:pointer;transition:all 0.2s ease-in-out;font-size:0.9rem}";
-  html += ".btn-save{background-color:transparent;border:1px solid var(--primary-color);color:var(--primary-color)}";
-  html += ".btn-save:hover{background-color:var(--primary-color);color:var(--bg-color)}";
-  html += ".btn-load{background-color:var(--primary-color);color:var(--bg-color)}";
-  html += ".btn-load:hover{background-color:var(--primary-color-hover)}";
-  
-  // Section Assignations
-  html += ".assignments-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}";
-  html += ".assignment-control{display:flex;flex-direction:column}";
-  html += ".assignment-control label{margin-bottom:0.5rem;font-weight:500}";
-  html += ".custom-select{appearance:none;background-color:#333;border:1px solid var(--border-color);padding:0.75rem;border-radius:6px;color:var(--text-color);cursor:pointer;width:100%}";
-  
-  // Section Paramètres avec sliders horizontaux
-  html += ".params-grid{display:grid;grid-template-columns:1fr;gap:1.5rem}";
-  html += ".param-control{display:flex;flex-direction:column}";
-  html += ".param-label-wrapper{display:flex;justify-content:space-between;margin-bottom:0.5rem}";
-  html += ".param-label-wrapper .param-name{font-weight:500}";
-  html += ".param-label-wrapper .param-value{font-family:monospace;background-color:#333;padding:0.1rem 0.4rem;border-radius:4px;font-size:0.9rem}";
-  html += ".slider{-webkit-appearance:none;appearance:none;width:100%;height:8px;background:#333;outline:none;border-radius:4px;cursor:pointer}";
-  html += ".slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;background:var(--primary-color);border-radius:50%;transition:background-color 0.2s}";
-  html += ".slider::-moz-range-thumb{width:20px;height:20px;background:var(--primary-color);border-radius:50%;border:none;transition:background-color 0.2s}";
-  html += ".slider:hover::-webkit-slider-thumb{background:var(--primary-color-hover)}";
-  html += ".slider:hover::-moz-range-thumb{background:var(--primary-color-hover)}";
-  
-  // Statut
-  html += ".status{text-align:center;margin-top:25px;padding:16px;border-radius:12px;background:rgba(76,175,80,0.2);font-weight:600;border:1px solid rgba(76,175,80,0.3);box-shadow:0 4px 15px rgba(0,0,0,0.2)}";
-  html += ".status.error{background:rgba(244,67,54,0.2);border-color:rgba(244,67,54,0.3)}";
-  
-  // Media Queries pour la responsivité
-  html += "@media (min-width:600px){.params-grid{grid-template-columns:repeat(2,1fr);gap:1rem 2rem}}";
-  html += "@media (min-width:800px){.params-grid{grid-template-columns:repeat(3,1fr)}}";
-  html += "</style></head><body>";
-  
-  html += "<div class='main-container'>";
-  html += "<header>";
-  html += "<h1>Contrôleur DMX ESP32</h1>";
-  html += "</header>";
 
-  // Section Presets avec boutons S1-S8 et L1-L8
-  html += "<section id='presets' class='card'>";
-  html += "<h2>Presets</h2>";
-  html += "<div class='presets-grid'>";
-  html += "<div class='preset-group'>";
-  html += "<label>Sauvegarder</label>";
-  html += "<div id='save-presets-container' class='preset-buttons'>";
-  html += "</div>";
-  html += "</div>";
-  html += "<div class='preset-group'>";
-  html += "<label>Charger</label>";
-  html += "<div id='load-presets-container' class='preset-buttons'>";
-  html += "</div>";
-  html += "</div>";
-  html += "</div>";
-  html += "</section>";
 
-  // Section Assignations
-  html += "<section id='assignments' class='card'>";
-  html += "<h2>Assignations Physiques</h2>";
-  html += "<div id='assignments-container' class='assignments-grid'>";
-  html += "</div>";
-  html += "</section>";
-
-  // Section Paramètres
-  html += "<section id='parameters' class='card'>";
-  html += "<h2>Paramètres</h2>";
-  html += "<div id='params-container' class='params-grid'>";
-  html += "</div>";
-  html += "</section>";
-  
-  html += "<div class='status' id='status'>✅ Prêt - Connecté au contrôleur DMX</div>";
-  html += "</div>";
-  
-  // JavaScript adapté du design de l'utilisateur
-  html += "<script>";
-  html += "document.addEventListener('DOMContentLoaded', () => {";
-  html += "// --- CONFIGURATION ---";
-  html += "const PARAM_COUNT = 21;";
-  html += "const PRESET_COUNT = 8;";
-  html += "const ASSIGNMENT_CONTROLS = ['Capteur IR 1', 'Capteur IR 2', 'Fader 2', 'Fader 3'];";
-  
-  // Noms des paramètres
-  html += "const paramNames = [";
-  html += "'Autopan Depth', 'Pitch', 'Vibrato Speed', 'Vibrato Depth', 'Delay Time', 'Delay Feedback',";
-  html += "'OSC Waveform', 'Gate Threshold', 'Portamento Time', 'Scale', 'Octave Low/High',";
-  html += "'OSC 2 Volume', 'OSC 2 Pitch Offset', 'Autopan Frequency', 'Scale Tonic',";
-  html += "'Volume Drums', 'Trig Kick', 'Trig Snare', 'Trig HH', 'Master Volume', 'Filter On/Off'";
-  html += "];";
-  
-  // --- RÉFÉRENCES DOM ---
-  html += "const savePresetsContainer = document.getElementById('save-presets-container');";
-  html += "const loadPresetsContainer = document.getElementById('load-presets-container');";
-  html += "const assignmentsContainer = document.getElementById('assignments-container');";
-  html += "const paramsContainer = document.getElementById('params-container');";
-  
-  // --- FONCTIONS API ---
-  html += "function updateParameter(paramId, value) {";
-  html += "fetch('/api/parameters', {";
-  html += "method: 'POST',";
-  html += "headers: {'Content-Type': 'application/json'},";
-  html += "body: JSON.stringify({id: parseInt(paramId), value: parseInt(value)})";
-  html += "})";
-  html += ".then(r => r.json())";
-  html += ".then(d => showStatus(d.success ? '✅ Paramètre mis à jour' : '❌ Erreur paramètre'))";
-  html += ".catch(e => showStatus('❌ Erreur de connexion'));";
-  html += "}";
-  
-  html += "function updateAssignment(assignId, value) {";
-  html += "fetch('/api/assignments', {";
-  html += "method: 'POST',";
-  html += "headers: {'Content-Type': 'application/json'},";
-  html += "body: JSON.stringify({index: parseInt(assignId), value: parseInt(value)})";
-  html += "})";
-  html += ".then(r => r.json())";
-  html += ".then(d => showStatus(d.success ? '✅ Assignation mise à jour' : '❌ Erreur assignation'))";
-  html += ".catch(e => showStatus('❌ Erreur de connexion'));";
-  html += "}";
-  
-  html += "function savePreset(presetId) {";
-  html += "fetch('/api/save-preset', {";
-  html += "method: 'POST',";
-  html += "headers: {'Content-Type': 'application/json'},";
-  html += "body: JSON.stringify({id: parseInt(presetId), name: `Preset ${presetId}`})";
-  html += "})";
-  html += ".then(r => r.json())";
-  html += ".then(d => showStatus(d.success ? `✅ Preset ${presetId} sauvegardé` : '❌ Erreur sauvegarde'))";
-  html += ".catch(e => showStatus('❌ Erreur de connexion'));";
-  html += "}";
-  
-  html += "function loadPreset(presetId) {";
-  html += "fetch('/api/load-preset', {";
-  html += "method: 'POST',";
-  html += "headers: {'Content-Type': 'application/json'},";
-  html += "body: JSON.stringify({id: parseInt(presetId)})";
-  html += "})";
-  html += ".then(r => r.json())";
-  html += ".then(d => {";
-  html += "if (d.success) {";
-  html += "loadCurrentParams();";
-  html += "showStatus(`✅ Preset ${presetId} chargé`);";
-  html += "} else showStatus('❌ Erreur chargement');";
-  html += "})";
-  html += ".catch(e => showStatus('❌ Erreur de connexion'));";
-  html += "}";
-  
-  html += "function loadCurrentParams() {";
-  html += "fetch('/api/parameters')";
-  html += ".then(r => r.json())";
-  html += ".then(d => {";
-  html += "d.parameters.forEach((value, index) => {";
-  html += "if (index < PARAM_COUNT) {";
-  html += "const slider = document.getElementById(`param-${index}`);";
-  html += "const valueDisplay = document.getElementById(`param-${index}-value`);";
-  html += "if (slider && valueDisplay) {";
-  html += "slider.value = value;";
-  html += "valueDisplay.textContent = value;";
-  html += "}";
-  html += "}";
-  html += "});";
-  html += "})";
-  html += ".catch(e => console.error('Erreur chargement paramètres:', e));";
-  html += "}";
-  
-  html += "function loadCurrentAssignments() {";
-  html += "fetch('/api/assignments')";
-  html += ".then(r => r.json())";
-  html += ".then(d => {";
-  html += "d.assignments.forEach((value, index) => {";
-  html += "const select = document.getElementById(`assign-${index}`);";
-  html += "if (select) select.value = value;";
-  html += "});";
-  html += "})";
-  html += ".catch(e => console.error('Erreur chargement assignations:', e));";
-  html += "}";
-  
-  html += "function showStatus(message) {";
-  html += "const status = document.getElementById('status');";
-  html += "status.textContent = message;";
-  html += "status.className = message.includes('❌') ? 'status error' : 'status';";
-  html += "setTimeout(() => {";
-  html += "status.textContent = '✅ Prêt - Connecté au Ksoloti Kontrol';";
-  html += "status.className = 'status';";
-  html += "}, 3000);";
-  html += "}";
-  
-  // --- GÉNÉRATION DYNAMIQUE DES CONTRÔLES ---
-  // 1. Générer les boutons de Presets S1-S8 et L1-L8
-  html += "for (let i = 1; i <= PRESET_COUNT; i++) {";
-  html += "// Bouton Sauvegarder";
-  html += "const saveBtn = document.createElement('button');";
-  html += "saveBtn.className = 'btn btn-save';";
-  html += "saveBtn.textContent = `S${i}`;";
-  html += "saveBtn.dataset.presetId = i;";
-  html += "saveBtn.addEventListener('click', () => {";
-  html += "savePreset(i);";
-  html += "});";
-  html += "savePresetsContainer.appendChild(saveBtn);";
-  html += "// Bouton Charger";
-  html += "const loadBtn = document.createElement('button');";
-  html += "loadBtn.className = 'btn btn-load';";
-  html += "loadBtn.textContent = `L${i}`;";
-  html += "loadBtn.dataset.presetId = i;";
-  html += "loadBtn.addEventListener('click', () => {";
-  html += "loadPreset(i);";
-  html += "});";
-  html += "loadPresetsContainer.appendChild(loadBtn);";
-  html += "}";
-  
-  // 2. Générer les options pour les menus déroulants
-  html += "const paramOptionsHTML = (() => {";
-  html += "let html = '<option value=\"-1\">OFF</option>';";
-  html += "for (let i = 0; i < PARAM_COUNT; i++) {";
-  html += "html += `<option value=\"${i}\">${paramNames[i] || `Param ${i + 1}`}</option>`;";
-  html += "}";
-  html += "return html;";
-  html += "})();";
-  
-  // 3. Générer les contrôles d'Assignation
-  html += "ASSIGNMENT_CONTROLS.forEach((name, index) => {";
-  html += "const controlId = `assign-${index}`;";
-  html += "const controlHTML = `";
-  html += "<div class=\"assignment-control\">";
-  html += "<label for=\"${controlId}\">${name}</label>";
-  html += "<select id=\"${controlId}\" class=\"custom-select\" data-assign-id=\"${index}\">";
-  html += "${paramOptionsHTML}";
-  html += "</select>";
-  html += "</div>";
-  html += "`;";
-  html += "assignmentsContainer.innerHTML += controlHTML;";
-  html += "});";
-  
-  // Ajouter les écouteurs d'événements après la création
-  html += "assignmentsContainer.querySelectorAll('.custom-select').forEach(select => {";
-  html += "select.addEventListener('change', (event) => {";
-  html += "updateAssignment(event.target.dataset.assignId, event.target.value);";
-  html += "});";
-  html += "});";
-  
-  // 4. Générer les Sliders de Paramètres
-  html += "for (let i = 0; i < PARAM_COUNT; i++) {";
-  html += "const paramId = `param-${i}`;";
-  html += "const paramName = paramNames[i] || `Paramètre ${i + 1}`;";
-  html += "const initialValue = 128; // Valeur par défaut";
-  html += "const controlHTML = `";
-  html += "<div class=\"param-control\">";
-  html += "<div class=\"param-label-wrapper\">";
-  html += "<span class=\"param-name\">${paramName}</span>";
-  html += "<span id=\"${paramId}-value\" class=\"param-value\">${initialValue}</span>";
-  html += "</div>";
-  html += "<input type=\"range\" id=\"${paramId}\" class=\"slider\" min=\"0\" max=\"255\" value=\"${initialValue}\" data-param-id=\"${i}\">";
-  html += "</div>";
-  html += "`;";
-  html += "paramsContainer.innerHTML += controlHTML;";
-  html += "}";
-  
-  // Ajouter les écouteurs d'événements après la création
-  html += "paramsContainer.querySelectorAll('.slider').forEach(slider => {";
-  html += "const valueDisplay = document.getElementById(`${slider.id}-value`);";
-  html += "slider.addEventListener('input', (event) => {";
-  html += "valueDisplay.textContent = event.target.value;";
-  html += "});";
-  html += "slider.addEventListener('change', (event) => {";
-  html += "updateParameter(event.target.dataset.paramId, event.target.value);";
-  html += "});";
-  html += "});";
-  
-  // Charger les données initiales
-  html += "loadCurrentParams();";
-  html += "loadCurrentAssignments();";
-  html += "});";
-  html += "</script></body></html>";
-  
-  webServer.send(200, "text/html", html);
-}
 
 // Sauvegarde des presets web dans LittleFS
 void saveWebPresets() {
@@ -2282,8 +2076,27 @@ void saveWebPresets() {
 
 // Chargement des presets web depuis LittleFS
 void loadWebPresets() {
+  Serial.println("🔍 DEBUG: Entrée dans loadWebPresets()");
+  
+  // Vérifier d'abord si le fichier existe
+  Serial.println("🔍 DEBUG: Vérification de l'existence du fichier...");
+  bool fileExists = LittleFS.exists("/web_presets.json");
+  Serial.print("🔍 DEBUG: LittleFS.exists() retourne: ");
+  Serial.println(fileExists ? "TRUE" : "FALSE");
+  
+  if (!fileExists) {
+    Serial.println("📂 Aucun preset web trouvé (première utilisation)");
+    webPresetCount = 0;
+    Serial.println("🔍 DEBUG: Sortie de loadWebPresets() - fichier n'existe pas");
+    return;
+  }
+  
+  Serial.println("🔍 DEBUG: Fichier existe, tentative d'ouverture...");
   File file = LittleFS.open("/web_presets.json", "r");
+  Serial.println("🔍 DEBUG: Après appel LittleFS.open()");
+  
   if (file) {
+    Serial.println("🔍 DEBUG: Fichier ouvert avec succès");
     DynamicJsonDocument doc(4096);
     deserializeJson(doc, file);
     file.close();
@@ -2311,7 +2124,10 @@ void loadWebPresets() {
     Serial.print("📂 ");
     Serial.print(webPresetCount);
     Serial.println(" presets web chargés");
+  } else {
+    Serial.println("🔍 DEBUG: Impossible d'ouvrir le fichier");
   }
+  Serial.println("🔍 DEBUG: Sortie de loadWebPresets()");
 }
 
 // Sauvegarde des assignations dans LittleFS
@@ -2333,6 +2149,16 @@ void saveWebAssignments() {
 
 // Chargement des assignations depuis LittleFS
 void loadWebAssignments() {
+  // Vérifier d'abord si le fichier existe
+  if (!LittleFS.exists("/web_assignments.json")) {
+    Serial.println("🔗 Aucune assignation web trouvée (première utilisation)");
+    // Initialiser avec des valeurs par défaut (tout à OFF)
+    for (int i = 0; i < 4; i++) {
+      webAssignments[i] = 0;
+    }
+    return;
+  }
+  
   File file = LittleFS.open("/web_assignments.json", "r");
   if (file) {
     DynamicJsonDocument doc(512);
@@ -2390,8 +2216,38 @@ void loadWebStateFromPreset0() {
   Serial.println("📂 État web chargé depuis le preset 0");
 }
 
+// Fonction pour réinitialiser les paramètres web quand on revient au preset 0
+void resetWebParameters() {
+  // Si on revient au preset 0, charger le dernier preset web utilisé
+  if (lastWebPreset >= 0 && lastWebPreset < webPresetCount) {
+    // Charger le dernier preset web
+    for (int i = 0; i < 21; i++) {
+      parameters[i].value = webPresets[lastWebPreset].values[i];
+      dmxValues[parameters[i].dmxChannel - 1] = webPresets[lastWebPreset].values[i];
+    }
+    Serial.println("🔄 Paramètres web réinitialisés depuis le dernier preset: " + String(lastWebPreset));
+  } else {
+    // Sinon, utiliser les valeurs du preset 0
+    loadWebStateFromPreset0();
+  }
+}
+
 // Gestion des contrôles physiques en mode web
 void handleWebPhysicalControls() {
+  // Vérifier s'il y a des assignations actives
+  bool hasActiveAssignments = false;
+  for (int i = 0; i < 4; i++) {
+    if (webAssignments[i] > 0 && webAssignments[i] <= 21) {
+      hasActiveAssignments = true;
+      break;
+    }
+  }
+  
+  // Si aucune assignation active, ne rien faire
+  if (!hasActiveAssignments) {
+    return;
+  }
+  
   // Lecture stabilisée des capteurs IR
   int stabilizedIR1 = readStabilizedIRSensor(DIST_SENSOR_1_PIN, irBuffer1, irIndex1, irSum1, irInitialized1);
   int stabilizedIR2 = readStabilizedIRSensor(DIST_SENSOR_2_PIN, irBuffer2, irIndex2, irSum2, irInitialized2);
