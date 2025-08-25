@@ -1,4 +1,4 @@
-// Noms des paramètres
+// Noms des paramètres web (27 paramètres)
 const paramNames = [
   'Autopan Depth', 'Pitch', 'Vibrato Speed', 'Vibrato Depth', 'Delay Time',
   'Delay Feedback', 'OSC Waveform', 'Gate Threshold', 'Portamento Time', 'Scale',
@@ -6,6 +6,8 @@ const paramNames = [
   'Volume Drums', 'Reserved 16', 'Reserved 17', 'Reserved 18', 'Master Volume (Inverted)',
   'Filter On-Off', 'Filter Cutoff', 'Filter Reso', 'Filter Type', 'RGB Red', 'RGB Green', 'RGB Blue'
 ];
+
+
 
 // Noms des assignations
 const assignmentNames = ['Capteur IR 1', 'Capteur IR 2', 'Fader 2', 'Fader 3'];
@@ -421,3 +423,4 @@ document.addEventListener('DOMContentLoaded', function() {
   // Démarrer sur la vue LIVE CONTROL
   switchView('live');
 });
+

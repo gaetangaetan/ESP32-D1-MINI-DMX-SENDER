@@ -450,3 +450,15 @@ header h1 {
 .rgb-values span span {
   color: var(--primary-color);
 }
+
+/* Info sur les presets */
+.preset-info {
+  font-size: 0.9em;
+  color: #4a90e2;
+  background: #f0f7ff;
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+  border-left: 3px solid #4a90e2;
+}
+

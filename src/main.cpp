@@ -131,6 +131,9 @@ void loadWebStateFromPreset0();
 void saveWebStateToPreset0();
 void resetWebParameters();
 void handleWebPhysicalControls();
+void loadWebPresetToPhysical(int presetId);
+
+
 
 // Création des objets
 TM1637Display display(TM1637_CLK_PIN, TM1637_DIO_PIN);
@@ -1001,105 +1004,23 @@ void handleEncoder() {
 23 filter reso
 24 filter type
 */
-// Fonction d'initialisation des presets
+// Fonction d'initialisation des presets - VERSION SIMPLIFIÉE
 void initializePresets() {
+  Serial.println("Initialisation des presets par défaut...");
 
-/*
-Targets : (0=IR1, 1=IR2, 2=Fader1, 3=Fader2, 4=Fader3)
-
-0  = autopan_depth           10  = octave_low_high         20 = filter_on_off            30 = button3_released_value
-1  = pitch                   11 = osc2_volume              21 = filter_cutoff            31 = button3_pressed_value
-2  = vibrato_speed           12 = osc2_pitch_offset        22 = filter_reso              32 = rgb1_red
-3  = vibrato_depth           13 = autopan_frequency        23 = filter_type              33 = rgb1_green
-4  = delay_time              14 = scale_tonic              24 = ir1_target_param         34 = rgb1_blue
-5  = delay_feedback          15 = volume_drums             25 = ir2_target_param         35 = rgb2_red
-6  = osc_waveform            16 = trig_kick                26 = fader1_target_param      36 = rgb2_green
-7  = gate_threshold          17 = trig_snare               27 = fader2_target_param      37 = rgb2_blue
-8  = portamento_time         18 = trig_hh                  28 = fader3_target_param      38 = dimmer1_source
-9  = scale                   19 = master_volume            29 = button3_target_param     39 = dimmer2_source
-*/
-  Serial.println("Initialisation des presets...");
-
-//                  |pandepth        |time           |porta          |osc2off       |kick       |master        |type             |fader2        |b3_pressed     /r2             /dim2
-//                       |pitch          |delFB          |scale         |autofreq       |snare      |filter         |ir1             |fader3        /r1             /g2
-//                           |vibraspeed     |osc            |octlow        |tonic          |hh         |cutoff         |ir2            |button3        /g1             /b2
-//                               |vibradepth     |gate           |osc2vol       |drums         |master     |reso            |fader1         |b3_rel         /b1             /dim1
-
-    // Preset 2 - Classical scale
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0, 0,  0,  0,  0);
-  savePreset(2, "Classical scale");
-
-      // Preset 3 - Classical scale siren
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0, 100, 3, 74, 83,100,155,213,255,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15, 14,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
-  savePreset(3, "Classical scale siren");
-
-      // Preset 0 - WEB MODE (pas d'assignations physiques)
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  50,255,0,  50,  0,  0);
+  // Preset 0 - WEB MODE (pas d'assignations physiques)
+  setAllParameters(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,255,0,50,255,0,50,0,0);
   savePreset(0, "WEB MODE");
-
-  // Preset 6 - Buzz1
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0, 59, 16, 74, 83,100,155,213,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15,  2,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
-  savePreset(6, "Buzz1");
-
-  // Preset 1 - Bass growler
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0, 59, 16, 74, 83,255,100,213,  0,  0,255,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0, 12,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);
-  savePreset(1, "Bass growler");
   
-
-  // Preset 5 - Furious octaver growl feedbacker
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,150,221, 10, 74,241,255,  0, 91,255,  0,255,196,  0,  0,255,  0,  0,  0, 50,  0,  0,  0,  0, 12,  3, 21, 22, 6, 18,  0,  5,255,  0,  0,  0,255,  0,  0,  1);
-  savePreset(5, "FuriousGrowl");
-
-
-
-
-    // Preset 7 - À définir
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  120, 75, 50,  0,150, 150,  0, 0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3, 21, 22, 23, 18,  0,  5,  0,255, 15,200,10, 255, 0,  0);
-  savePreset(7, "Preset7");
-
-
-
-  // Preset 4 - Simple sans effet
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0, 64, 10,  0,  0,100,  80, 75,  0,  0,  0,  0,  0,  0,255,  0,  0,  0, 0,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0,  0,  1);
-  savePreset(4, "Simple");
+  // Presets 1-9 : presets par défaut basiques (seront remplacés par LittleFS)
+  for (int i = 1; i < MAX_PRESETS; i++) {
+    // Preset basique avec assignations standards
+    setAllParameters(0,0,0,0,0,0,0,80,0,0,0,0,0,0,0,255,0,0,0,0,0,0,0,0,1,3,2,4,5,18,0,5,255,0,0,255,0,0,0,1);
+    String presetName = "Preset " + String(i);
+    savePreset(i, presetName.c_str());
+  }
   
-  // Preset 1 - Simple avec effet
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0,  0,  0,130,110,100, 100, 30,  0,255,  0,  0,  0,  0,255,  0,  0,  0, 0,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,255,  0,  0,  0,  1);
-  savePreset(8, "Simple+Effet");
-  
-  // // Preset 2 - Octaver and growl
-  // //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  // setAllParameters(  0,  0, 64, 10, 90,110,145,  0, 75,255,  0,255,140,  0,  0,255,  0,  0,  0, 0,  0,  0,  0,  0,  1,  3,  21, 22, 23, 18,  0,  5,255,255,  50,  0,255,255,  0,  1);
-  // savePreset(2, "OctaverGrowl");
-  
-  // // Preset 3 - Modern siren vibrafrenzy
-  // //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  // setAllParameters(  0,  0,162,129,140,167,205,  0,108,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,255,  0, 50,  0,  1);
-  // savePreset(3, "ModernSiren");
-  
-
-  
-  
-
-  
-
-  
-  
-  // Preset 9 - À définir
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39  
-  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0,  0,  1);
-  savePreset(9, "Preset9");
-  
-  Serial.println("Presets initialisés");
+  Serial.println("Presets par défaut initialisés (seront remplacés par LittleFS)");
 }
 // Fonctions d'interruption pour les boutons
 void IRAM_ATTR button1ISR() {
@@ -1302,14 +1223,50 @@ void handleButtonInterrupts() {
 }
 
 
+// Fonction pour charger un preset web dans les paramètres physiques
+void loadWebPresetToPhysical(int presetId) {
+  if (presetId < 1 || presetId > MAX_WEB_PRESETS) {
+    Serial.println("ID de preset web invalide: " + String(presetId));
+    return;
+  }
+  
+  // Charger les données du preset web depuis la mémoire
+  // Vérifier si le preset a un nom (= il a été sauvegardé)
+  if (strlen(webPresets[presetId - 1].name) > 0) {
+    // Appliquer les 27 paramètres du preset web aux paramètres physiques
+    for (int i = 0; i < 27 && i < PRESET_SIZE; i++) {
+      parameters[i].value = webPresets[presetId - 1].values[i];
+      dmxValues[parameters[i].dmxChannel - 1] = parameters[i].value;
+    }
+    
+    // Appliquer l'octave web
+    webOctave = webPresets[presetId - 1].octave;
+    applyWebOctave();
+    
+    // Activer le mode web pour pouvoir utiliser l'octave
+    webModeActive = true;
+    
+    Serial.println("Preset web " + String(presetId) + " (" + String(webPresets[presetId - 1].name) + ") chargé (octave: " + String(webOctave) + ")");
+  } else {
+    Serial.println("Preset web " + String(presetId) + " vide, utilisation des valeurs par défaut");
+    // Charger des valeurs par défaut
+    for (int i = 0; i < PRESET_SIZE; i++) {
+      parameters[i].value = 0;
+      dmxValues[parameters[i].dmxChannel - 1] = 0;
+    }
+    webOctave = 0;
+    webModeActive = true;
+  }
+}
+
 // Fonction pour gérer l'encodeur KY-040
 void handleEncoder() {
   int32_t currentEncoderValue = - encoder.getCount();
   
-  // Calculer le preset selon la formule : |valeur_encoder / 2| % 10
-  // Utiliser la valeur absolue pour éviter les problèmes avec les grandes valeurs négatives
+  // Calculer le preset selon la formule : |valeur_encoder / 2| % 9 (0-8)
+  // Preset 0 = mode web, presets 1-8 = presets web sauvegardés
   int32_t normalizedValue = abs(currentEncoderValue / 2);
-  uint8_t newPreset = normalizedValue % MAX_PRESETS;
+  uint8_t newPreset = normalizedValue % 9; // 0 à 8 au lieu de 0 à 9
   
   // Si le preset a changé
   if (newPreset != selectedPreset) {
@@ -1324,11 +1281,12 @@ void handleEncoder() {
     transpose = 0;
     
     // Charger le preset sélectionné
-    loadPreset(selectedPreset);
-    
-    // Si on revient au preset 0, réinitialiser les paramètres web
     if (selectedPreset == 0) {
+      // Preset 0 : mode web
       resetWebParameters();
+    } else {
+      // Presets 1-8 : charger les presets web depuis LittleFS
+      loadWebPresetToPhysical(selectedPreset);
     }
     
     // Pas besoin d'updateGateThresholdWithTranspose() car transpose = 0
@@ -1339,8 +1297,12 @@ void handleEncoder() {
     // Debug sur le moniteur série
     Serial.print("Preset changé: ");
     Serial.print(selectedPreset);
-    Serial.print(" - ");
-    Serial.println(presets[selectedPreset].name);
+    if (selectedPreset == 0) {
+      Serial.println(" - WEB MODE");
+    } else {
+      Serial.print(" - Preset web ");
+      Serial.println(selectedPreset);
+    }
     Serial.println("Transposition réinitialisée à 0");
   }
   
@@ -1414,7 +1376,7 @@ void displayUnified() {
   }
   
   // Calcul pour les digits du preset (positions 2 et 3)
-  segments[2] = display.encodeDigit(0); // Toujours 0 car preset va de 0 à 9
+  segments[2] = display.encodeDigit(0); // Toujours 0 car preset va de 0 à 8
   segments[3] = display.encodeDigit(selectedPreset);
   
   // Afficher les segments
@@ -1778,6 +1740,7 @@ void setupWebInterface() {
   loadWebPresets();
   Serial.println("🔄 Début du chargement des assignations web...");
   loadWebAssignments();
+
 }
 
 // Configuration des routes du serveur web
@@ -1836,6 +1799,7 @@ void setupWebRoutes() {
   
   // API pour gérer les octaves
   webServer.on("/api/octave", HTTP_POST, handleOctave);
+  
   
   // Gestion des erreurs 404
   webServer.onNotFound(handleNotFound);
