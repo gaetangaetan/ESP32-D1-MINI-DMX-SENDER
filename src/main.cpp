@@ -71,7 +71,7 @@
 // Configuration des presets
 #define PRESET_SIZE 40  // Nombre de paramètres par preset (40 au lieu de 38)
 #define MAX_PRESETS 10  // Nombre maximum de presets
-#define MAX_WEB_PRESETS 5  // Nombre maximum de presets web
+#define MAX_WEB_PRESETS 8  // Nombre maximum de presets web (S1-S8 et L1-L8)
 
 // Configuration des trigs
 #define TRIG_LENGTH 5   // Durée des trigs en nombre de paquets DMX
@@ -101,7 +101,8 @@ typedef struct {
 // Structure pour un preset web
 typedef struct {
   char name[32];
-  uint8_t values[21];  // 21 paramètres audio principaux (0-20)
+  uint8_t values[27];  // 27 paramètres (0-20: audio principaux, 21-23: filter, 24-26: rgb1)
+  int8_t octave;       // Octave web (-12 à +12)
 } WebPreset;
 
 // ============================================================================
@@ -277,6 +278,7 @@ uint8_t transpose_factor = 24;  // Facteur de transposition
 
 // Prototypes
 void displayUnified();
+void applyWebOctave();
 
 // Fonction pour stabiliser un capteur IR avec moyenne mobile et limitation d'aberrants
 int stabilizeIRSensor(int newValue, int* buffer, int& index, int& sum, bool& initialized) {
@@ -397,6 +399,25 @@ void updateGateThresholdWithTranspose() {
   Serial.print(", index DMX ");
   Serial.print(parameters[7].dmxChannel - 1);
   Serial.println(")");
+}
+
+// Fonction pour appliquer l'octave web directement aux paramètres sensibles
+void applyWebOctave() {
+  if (selectedPreset == 0 && webModeActive) {
+    // Appliquer l'octave au pitch (paramètre 1)
+    int pitchValue = (int)parameters[1].value + (webOctave * transpose_factor);
+    if (pitchValue < 0) pitchValue = 0;
+    if (pitchValue > 255) pitchValue = 255;
+    dmxValues[parameters[1].dmxChannel - 1] = (uint8_t)pitchValue;
+    
+    // Appliquer l'octave au gate_threshold (paramètre 7)
+    int gateValue = (int)parameters[7].value + (webOctave * transpose_factor);
+    if (gateValue < 0) gateValue = 0;
+    if (gateValue > 255) gateValue = 255;
+    dmxValues[parameters[7].dmxChannel - 1] = (uint8_t)gateValue;
+    
+    // Debug supprimé pour améliorer les performances
+  }
 }
 
 // Fonction pour obtenir la valeur d'un paramètre par son nom
@@ -633,21 +654,44 @@ uint8_t getControlValue(uint8_t source) {
 
 // Fonction pour mettre à jour le dimmer RGB avec inertie
 void updateRGBWithDimmer() {
-  // Lecture des valeurs RGB depuis les paramètres
-  uint8_t rgb1Red = getParameter("rgb1_red");
-  uint8_t rgb1Green = getParameter("rgb1_green");
-  uint8_t rgb1Blue = getParameter("rgb1_blue");
-  uint8_t rgb2Red = getParameter("rgb2_red");
-  uint8_t rgb2Green = getParameter("rgb2_green");
-  uint8_t rgb2Blue = getParameter("rgb2_blue");
+  // En mode web, utiliser les valeurs RGB du preset web courant
+  uint8_t rgb1Red, rgb1Green, rgb1Blue, rgb2Red, rgb2Green, rgb2Blue;
+
+    // Lecture des sources des dimmers depuis les paramètres
+    uint8_t dimmer1Source = getParameter("dimmer1_source");
+    uint8_t dimmer2Source = getParameter("dimmer2_source");
+    uint8_t control1Value;
+    uint8_t control2Value;
+    
+    
   
-  // Lecture des sources des dimmers depuis les paramètres
-  uint8_t dimmer1Source = getParameter("dimmer1_source");
-  uint8_t dimmer2Source = getParameter("dimmer2_source");
+  if (selectedPreset == 0 && webModeActive) {
+    // Mode web : utiliser les valeurs RGB de l'interface web (paramètres 24-26)
+    rgb1Red = parameters[24].value;    // rgb1_red
+    rgb1Green = parameters[25].value;  // rgb1_green
+    rgb1Blue = parameters[26].value;   // rgb1_blue
+    // Pour RGB2, utiliser les mêmes valeurs RGB que RGB1 en mode web
+    rgb2Red = parameters[24].value;
+    rgb2Green = parameters[25].value;
+    rgb2Blue = parameters[26].value;
+
+    control1Value = getControlValue(0); // IR1
+    control2Value = control1Value;
+  } else {
+    // Mode boîtier : utiliser les valeurs RGB des paramètres du preset
+    rgb1Red = getParameter("rgb1_red");
+    rgb1Green = getParameter("rgb1_green");
+    rgb1Blue = getParameter("rgb1_blue");
+    rgb2Red = getParameter("rgb2_red");
+    rgb2Green = getParameter("rgb2_green");
+    rgb2Blue = getParameter("rgb2_blue");
+
+    // Lecture des valeurs des contrôles assignés
+    control1Value = getControlValue(dimmer1Source);
+    control2Value = getControlValue(dimmer2Source);
+  }
   
-  // Lecture des valeurs des contrôles assignés
-  uint8_t control1Value = getControlValue(dimmer1Source);
-  uint8_t control2Value = getControlValue(dimmer2Source);
+
   
   // Mapping 50-255 → 0-255 (en dessous de 50 = éteint)
   float rawDimmer1 = (float)control1Value / 255.0;
@@ -1333,36 +1377,39 @@ void handleEncoder() {
 
 // Fonction pour afficher la transposition et le preset de manière unifiée
 void displayUnified() {
-  // Format: TTPP où TT = transposition (-12 à +12) et PP = preset (0-9)
+  // Format: TTPP où TT = transposition/octave (-12 à +12) et PP = preset (0-9)
   // Exemples: 
   // - Transposition +5, preset 3 → "0503" 
   // - Transposition -2, preset 7 → "-207"
-  // - Transposition 0, preset 1 → "0001"
+  // - Octave web +3, preset 0 → "0300"
   
   uint8_t segments[4] = {0, 0, 0, 0};
   
-  // Calcul pour les digits de la transposition (positions 0 et 1)
-  if (transpose == 0) {
-    // Transposition = 0 : afficher "00"
+  // Choisir entre transposition physique et octave web
+  int8_t displayValue = (selectedPreset == 0 && webModeActive) ? webOctave : transpose;
+  
+  // Calcul pour les digits de la transposition/octave (positions 0 et 1)
+  if (displayValue == 0) {
+    // Valeur = 0 : afficher "00"
     segments[0] = display.encodeDigit(0);
     segments[1] = display.encodeDigit(0);
-  } else if (transpose > 0) {
-    // Transposition positive : afficher directement le nombre
-    if (transpose >= 10) {
-      segments[0] = display.encodeDigit(transpose / 10);
-      segments[1] = display.encodeDigit(transpose % 10);
+  } else if (displayValue > 0) {
+    // Valeur positive : afficher directement le nombre
+    if (displayValue >= 10) {
+      segments[0] = display.encodeDigit(displayValue / 10);
+      segments[1] = display.encodeDigit(displayValue % 10);
     } else {
       segments[0] = display.encodeDigit(0);
-      segments[1] = display.encodeDigit(transpose);
+      segments[1] = display.encodeDigit(displayValue);
     }
   } else {
-    // Transposition négative : afficher "-" + valeur absolue
+    // Valeur négative : afficher "-" + valeur absolue
     segments[0] = 0x40; // Segment "-"
-    int absTranspose = -transpose;
-    if (absTranspose >= 10) {
-      segments[1] = display.encodeDigit(absTranspose / 10);
+    int absValue = -displayValue;
+    if (absValue >= 10) {
+      segments[1] = display.encodeDigit(absValue / 10);
     } else {
-      segments[1] = display.encodeDigit(absTranspose);
+      segments[1] = display.encodeDigit(absValue);
     }
   }
   
@@ -1638,8 +1685,12 @@ void loop()
   // Gestion des boutons push
   handleButtonInterrupts();
   
-  // Gestion du serveur web
-  webServer.handleClient();
+  // Gestion du serveur web (limité à 10Hz pour éviter la surcharge)
+  static unsigned long lastWebServerUpdate = 0;
+  if (millis() - lastWebServerUpdate >= 100) { // 100ms = 10Hz
+    webServer.handleClient();
+    lastWebServerUpdate = millis();
+  }
   
   // Gestion de l'encodeur KY-040
  // handleEncoder();
@@ -1649,6 +1700,7 @@ void loop()
   
   // Émission à fréquence fixe (50Hz)
   if (millis() - lastEmissionTime >= EMISSION_INTERVAL) {
+    
     setlights();
     sendDMXvalues();
     lastEmissionTime = millis();
@@ -1714,6 +1766,12 @@ void setupWebInterface() {
   // Démarrer le serveur web
   webServer.begin();
   Serial.println("🌐 Serveur web démarré");
+  
+  // Initialiser les tableaux de presets web
+  for (int i = 0; i < MAX_WEB_PRESETS; i++) {
+    webPresets[i].name[0] = '\0'; // Marquer les slots comme vides
+    webPresets[i].octave = 0;     // Initialiser l'octave à 0
+  }
   
   // Charger les presets web et assignations
   Serial.println("🔄 Début du chargement des presets web...");
@@ -1792,15 +1850,15 @@ void handleGetParameters() {
   DynamicJsonDocument doc(1024);
   JsonArray paramsArray = doc.createNestedArray("parameters");
   
-  // Envoyer les 21 paramètres audio principaux (0-20)
+  // Envoyer les 27 paramètres web (0-20: audio, 21-23: filter, 24-26: rgb1)
   // Si on est en mode web (preset 0), utiliser les valeurs des paramètres
   // Sinon, utiliser les valeurs du preset actuel
   if (selectedPreset == 0) {
-    for (int i = 0; i < 21; i++) {
+    for (int i = 0; i < 27; i++) {
       paramsArray.add(parameters[i].value);
     }
   } else {
-    for (int i = 0; i < 21; i++) {
+    for (int i = 0; i < 27; i++) {
       paramsArray.add(presets[selectedPreset].values[i]);
     }
   }
@@ -1821,7 +1879,7 @@ void handleUpdateParameter() {
     int id = doc["id"];
     int value = doc["value"];
     
-    if (id >= 0 && id < 21 && value >= 0 && value <= 255) {
+    if (id >= 0 && id < 27 && value >= 0 && value <= 255) {
       parameters[id].value = value;
       dmxValues[parameters[id].dmxChannel - 1] = value;
       
@@ -1894,15 +1952,23 @@ void handleSaveWebPreset() {
     
     const char* name = doc["name"];
     JsonArray values = doc["values"];
+    int slot = doc["slot"]; // Nouveau : index du slot où sauvegarder
     
-    if (webPresetCount < MAX_WEB_PRESETS && values.size() == 21) {
-      strcpy(webPresets[webPresetCount].name, name);
+    if (slot >= 0 && slot < MAX_WEB_PRESETS && values.size() == 27) {
+      strcpy(webPresets[slot].name, name);
       
-      for (int i = 0; i < 21; i++) {
-        webPresets[webPresetCount].values[i] = values[i];
+      for (int i = 0; i < 27; i++) {
+        webPresets[slot].values[i] = values[i];
       }
       
-      webPresetCount++;
+      // Sauvegarder l'octave web actuelle
+      webPresets[slot].octave = webOctave;
+      
+      // Mettre à jour webPresetCount si nécessaire
+      if (slot >= webPresetCount) {
+        webPresetCount = slot + 1;
+      }
+      
       saveWebPresets();
       
       DynamicJsonDocument response(128);
@@ -1913,7 +1979,7 @@ void handleSaveWebPreset() {
       serializeJson(response, responseStr);
       webServer.send(200, "application/json", responseStr);
     } else {
-      webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Impossible de sauvegarder\"}");
+      webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Slot invalide ou données incorretes\"}");
     }
   } else {
     webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Données manquantes\"}");
@@ -1928,12 +1994,22 @@ void handleLoadWebPreset() {
     
     int id = doc["id"];
     
-    if (id >= 0 && id < webPresetCount) {
+    // Vérifier que le slot existe et contient des données
+    if (id >= 0 && id < MAX_WEB_PRESETS && id < webPresetCount && strlen(webPresets[id].name) > 0) {
       // Appliquer les valeurs du preset
-      for (int i = 0; i < 21; i++) {
+      for (int i = 0; i < 27; i++) {
         parameters[i].value = webPresets[id].values[i];
         dmxValues[parameters[i].dmxChannel - 1] = webPresets[id].values[i];
       }
+      
+      // Charger l'octave du preset
+      webOctave = webPresets[id].octave;
+      
+      // Appliquer l'octave aux paramètres sensibles
+      applyWebOctave();
+      
+      // Mettre à jour l'affichage de l'octave
+      displayUnified();
       
       lastWebPreset = id;
       
@@ -1946,7 +2022,7 @@ void handleLoadWebPreset() {
       
       // Retourner les vraies valeurs des presets web (pas des paramètres actuels)
       JsonArray paramsArray = response.createNestedArray("parameters");
-      for (int i = 0; i < 21; i++) {
+      for (int i = 0; i < 27; i++) {
         paramsArray.add(webPresets[id].values[i]);
       }
       
@@ -1954,7 +2030,7 @@ void handleLoadWebPreset() {
       serializeJson(response, responseStr);
       webServer.send(200, "application/json", responseStr);
     } else {
-      webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Preset invalide\"}");
+      webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Preset non trouvé ou slot vide\"}");
     }
   } else {
     webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Données manquantes\"}");
@@ -1991,21 +2067,15 @@ void handleOctave() {
       webOctave--;
     }
     
-    // Appliquer l'octave si on est en mode web
+    // Appliquer l'octave web directement (système séparé)
+    applyWebOctave();
+    
+    // Afficher l'octave sur l'écran (utiliser webOctave au lieu de transpose)
     if (selectedPreset == 0 && webModeActive) {
-      // Mettre à jour la transposition globale pour que la logique existante fonctionne
-      transpose = webOctave;
-      
-      // Appliquer la transposition au pitch et au threshold
-      updateGateThresholdWithTranspose();
-      
-      // Afficher la nouvelle transposition sur l'écran
       displayUnified();
       
-      Serial.print("Octave web: ");
-      Serial.print(webOctave);
-      Serial.print(" | Transposition appliquée: ");
-      Serial.println(transpose);
+      Serial.print("🎵 Octave web mise à jour: ");
+      Serial.println(webOctave);
     }
     
     DynamicJsonDocument response(256);
@@ -2058,13 +2128,18 @@ void saveWebPresets() {
     DynamicJsonDocument doc(4096);
     JsonArray presetsArray = doc.createNestedArray("presets");
     
-    for (int i = 0; i < webPresetCount; i++) {
-      JsonObject preset = presetsArray.createNestedObject();
-      preset["name"] = webPresets[i].name;
-      
-      JsonArray valuesArray = preset.createNestedArray("values");
-      for (int j = 0; j < 21; j++) {
-        valuesArray.add(webPresets[i].values[j]);
+    for (int i = 0; i < MAX_WEB_PRESETS; i++) {
+      // Sauvegarder seulement les slots qui contiennent des données
+      if (strlen(webPresets[i].name) > 0) {
+        JsonObject preset = presetsArray.createNestedObject();
+        preset["slot"] = i;  // Sauvegarder le numéro de slot
+        preset["name"] = webPresets[i].name;
+        preset["octave"] = webPresets[i].octave; // Sauvegarder l'octave
+        
+        JsonArray valuesArray = preset.createNestedArray("values");
+        for (int j = 0; j < 27; j++) {
+          valuesArray.add(webPresets[i].values[j]);
+        }
       }
     }
     
@@ -2105,19 +2180,27 @@ void loadWebPresets() {
     webPresetCount = 0;
     
     for (JsonObject preset : presetsArray) {
-      if (webPresetCount < MAX_WEB_PRESETS) {
-        strcpy(webPresets[webPresetCount].name, preset["name"]);
+      int slot = preset["slot"]; // Récupérer le numéro de slot
+      
+      if (slot >= 0 && slot < MAX_WEB_PRESETS) {
+        strcpy(webPresets[slot].name, preset["name"]);
+        
+        // Charger l'octave (défaut à 0 si pas présent pour compatibilité)
+        webPresets[slot].octave = preset["octave"] | 0;
         
         JsonArray valuesArray = preset["values"];
         int i = 0;
         for (JsonVariant value : valuesArray) {
-          if (i < 21) {
-            webPresets[webPresetCount].values[i] = value;
+          if (i < 27) {
+            webPresets[slot].values[i] = value;
             i++;
           }
         }
         
-        webPresetCount++;
+        // Mettre à jour webPresetCount si nécessaire
+        if (slot >= webPresetCount) {
+          webPresetCount = slot + 1;
+        }
       }
     }
     
@@ -2234,6 +2317,7 @@ void resetWebParameters() {
 
 // Gestion des contrôles physiques en mode web
 void handleWebPhysicalControls() {
+  updateRGBWithDimmer();
   // Vérifier s'il y a des assignations actives
   bool hasActiveAssignments = false;
   for (int i = 0; i < 4; i++) {
@@ -2285,5 +2369,8 @@ void handleWebPhysicalControls() {
     parameters[paramIndex].value = fader3Value;
     dmxValues[parameters[paramIndex].dmxChannel - 1] = fader3Value;
   }
+  
+  // Appliquer l'octave web après la mise à jour des contrôles physiques
+  applyWebOctave();
 }
 

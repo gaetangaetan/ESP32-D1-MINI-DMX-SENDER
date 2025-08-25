@@ -9,10 +9,12 @@
 <body>
     <div class="main-container">
         <header>
-            <h1>Ksoloti Kontrol v012</h1>
-            <div class="view-toggle">
-                <button id="liveViewBtn" class="view-btn active">LIVE CONTROL</button>
-                <button id="configViewBtn" class="view-btn">CONFIG</button>
+            <div class="header-content">
+                <h1>Ksoloti Kontrol v012</h1>
+                <div class="view-toggle">
+                    <button id="liveViewBtn" class="view-btn active">LIVE CONTROL</button>
+                    <button id="configViewBtn" class="view-btn">CONFIG</button>
+                </div>
             </div>
         </header>
 
@@ -27,19 +29,9 @@
                 </div>
             </section>
             
-            <section id="parameters" class="card">
-                <h2>Paramètres Live</h2>
-                <div class="params-grid" id="paramsGrid">
-                    <!-- Généré dynamiquement par JavaScript -->
-                </div>
-            </section>
-        </div>
-
-        <!-- Vue CONFIG -->
-        <div id="configView" class="view">
-            <!-- Section Presets -->
+            <!-- Section Presets intégrée dans Live Control -->
             <section id="presets" class="card">
-                <h2>Presets</h2>
+                <h2>Presets Rapides</h2>
                 <div class="presets-grid">
                     <div class="preset-group">
                         <label>Sauvegarder</label>
@@ -55,7 +47,55 @@
                     </div>
                 </div>
             </section>
+            
+            <!-- Section Filtres -->
+            <section id="filters" class="card">
+                <h2>Filtres</h2>
+                <div class="filter-controls">
+                    <div class="filter-row">
+                        <label for="filter-cutoff">Cutoff</label>
+                        <input type="range" id="filter-cutoff" class="fader" min="0" max="255" value="0">
+                        <span class="value-display" id="filter-cutoff-value">0</span>
+                    </div>
+                    <div class="filter-row">
+                        <label for="filter-reso">Résonance</label>
+                        <input type="range" id="filter-reso" class="fader" min="0" max="255" value="0">
+                        <span class="value-display" id="filter-reso-value">0</span>
+                    </div>
+                    <div class="filter-row">
+                        <label for="filter-type">Type</label>
+                        <input type="range" id="filter-type" class="fader" min="0" max="255" value="0">
+                        <span class="value-display" id="filter-type-value">0</span>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Section RGB -->
+            <section id="rgb" class="card">
+                <h2>Couleur RGB</h2>
+                <div class="rgb-controls">
+                    <div class="color-picker-container">
+                        <label for="color-picker">Couleur:</label>
+                        <input type="color" id="color-picker" value="#ff0000">
+                        <div class="rgb-values">
+                            <span>R: <span id="rgb-red-value">255</span></span>
+                            <span>G: <span id="rgb-green-value">0</span></span>
+                            <span>B: <span id="rgb-blue-value">0</span></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
+            <section id="parameters" class="card">
+                <h2>Paramètres Live</h2>
+                <div class="params-grid" id="paramsGrid">
+                    <!-- Généré dynamiquement par JavaScript -->
+                </div>
+            </section>
+        </div>
+
+        <!-- Vue CONFIG -->
+        <div id="configView" class="view">
             <!-- Section Assignations -->
             <section id="assignments" class="card">
                 <h2>Assignations Physiques</h2>

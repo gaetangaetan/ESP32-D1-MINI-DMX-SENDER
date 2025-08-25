@@ -38,24 +38,30 @@ body {
 
 /* --- En-tête --- */
 header {
-  text-align: center;
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 1rem;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 header h1 {
   font-size: 1.8rem;
   font-weight: 700;
   color: var(--primary-color);
-  margin-bottom: 1rem;
+  margin: 0;
 }
 
 /* Toggle des vues */
 .view-toggle {
   display: flex;
-  justify-content: center;
   gap: 1rem;
-  margin-top: 1rem;
+  margin: 0;
 }
 
 .view-btn {
@@ -108,26 +114,40 @@ header h1 {
 /* --- Section Presets --- */
 .presets-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: 1fr;
+  gap: 1rem;
 }
 
 .presets-grid .preset-group {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0;
 }
 
 .presets-grid label {
   display: block;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: var(--text-color-secondary);
   margin-bottom: 0.5rem;
   text-align: center;
+  font-weight: 500;
 }
 
 .preset-buttons {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   gap: 0.5rem;
+}
+
+/* Responsive pour les presets */
+@media (max-width: 600px) {
+  .preset-buttons {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.3rem;
+  }
+  
+  .header-content {
+    flex-direction: column;
+    text-align: center;
+  }
 }
 
 /* --- Section Assignations --- */
@@ -319,4 +339,114 @@ header h1 {
   color: var(--primary-color);
   min-width: 2rem;
   text-align: center;
+}
+
+/* --- Contrôles Filtres --- */
+.filter-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.filter-row label {
+  min-width: 120px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.filter-row .fader {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  background: #333;
+  outline: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.filter-row .fader::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: var(--primary-color);
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.filter-row .fader::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: var(--primary-color);
+  border-radius: 50%;
+  border: none;
+  transition: background-color 0.2s;
+}
+
+.filter-row .value-display {
+  min-width: 40px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--primary-color);
+  font-family: monospace;
+}
+
+/* --- Contrôles RGB --- */
+.rgb-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.color-picker-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.color-picker-container label {
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+#color-picker {
+  width: 80px;
+  height: 40px;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  background: none;
+}
+
+#color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+#color-picker::-webkit-color-swatch {
+  border: 2px solid var(--border-color);
+  border-radius: var(--border-radius);
+}
+
+.rgb-values {
+  display: flex;
+  gap: 1rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+}
+
+.rgb-values span {
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+.rgb-values span span {
+  color: var(--primary-color);
 }
