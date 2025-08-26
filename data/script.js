@@ -90,14 +90,35 @@ function savePreset(presetId) {
   
   // Paramètres principaux (0-20)
   for (let i = 0; i < 21; i++) {
-    const slider = document.getElementById('param-' + i);
-    values.push(parseInt(slider.value));
+    let value = 0;
+    
+    if (i === 6) {
+      // OSC Waveform - récupérer depuis l'affichage de valeur
+      const valueDisplay = document.getElementById('value-6');
+      value = valueDisplay ? parseInt(valueDisplay.textContent) : 0;
+    } else if (i === 20) {
+      // Filter On-Off - récupérer depuis l'affichage de valeur
+      const valueDisplay = document.getElementById('value-20');
+      value = valueDisplay && valueDisplay.textContent === 'ON' ? 1 : 0;
+    } else {
+      // Contrôle normal avec slider
+      const slider = document.getElementById('param-' + i);
+      value = slider ? parseInt(slider.value) : 0;
+    }
+    
+    values.push(value);
   }
   
   // Paramètres filter (21-23)
   values.push(parseInt(document.getElementById('filter-cutoff').value));
   values.push(parseInt(document.getElementById('filter-reso').value));
-  values.push(parseInt(document.getElementById('filter-type').value));
+  
+  // Filter type - récupérer depuis les boutons actifs
+  let filterType = 0; // OFF par défaut
+  if (document.getElementById('filter-hp').classList.contains('active')) filterType = 1;
+  else if (document.getElementById('filter-bp').classList.contains('active')) filterType = 2;
+  else if (document.getElementById('filter-lp').classList.contains('active')) filterType = 3;
+  values.push(filterType);
   
   // Paramètres RGB (24-26)
   values.push(parseInt(document.getElementById('rgb-red-value').textContent));
@@ -186,11 +207,30 @@ function loadCurrentParams() {
   .then(r => r.json())
   .then(d => {
     d.parameters.forEach((value, index) => {
-      const slider = document.getElementById('param-' + index);
       const valueDisplay = document.getElementById('value-' + index);
-      if (slider && valueDisplay) {
-        slider.value = value;
-        valueDisplay.textContent = value;
+      
+      if (index === 6) {
+        // OSC Waveform - mettre à jour l'affichage seulement
+        if (valueDisplay) {
+          valueDisplay.textContent = value;
+        }
+      } else if (index === 20) {
+        // Filter On-Off - mettre à jour l'affichage et le bouton
+        if (valueDisplay) {
+          valueDisplay.textContent = value === 1 ? 'ON' : 'OFF';
+        }
+        const toggleBtn = document.getElementById('filter-toggle');
+        if (toggleBtn) {
+          toggleBtn.textContent = value === 1 ? 'ON' : 'OFF';
+          toggleBtn.classList.toggle('active', value === 1);
+        }
+      } else {
+        // Contrôle normal avec slider
+        const slider = document.getElementById('param-' + index);
+        if (slider && valueDisplay) {
+          slider.value = value;
+          valueDisplay.textContent = value;
+        }
       }
     });
   })
