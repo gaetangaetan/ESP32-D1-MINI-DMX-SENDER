@@ -107,7 +107,7 @@ typedef struct {
 } WebPreset;        
         
 // ============================================================================        
-// D├ëCLARATIONS DES FONCTIONS DE L'INTERFACE WEB        
+// DÉCLARATIONS DES FONCTIONS DE L'INTERFACE WEB        
 // ============================================================================        
         
 // Fonctions de l'interface web        
@@ -245,12 +245,12 @@ unsigned long lastEncoderButtonPress = 0;
         
 // Variables pour l'affichage        
 unsigned long lastDisplayUpdate = 0;        
-const unsigned long DISPLAY_UPDATE_INTERVAL = 100; // 100ms entre les mises ├á jour        
+const unsigned long DISPLAY_UPDATE_INTERVAL = 100; // 100ms entre les mises à jour        
         
 // Variable pour le compteur d'affichage        
 uint16_t displayCounter = 0;        
         
-// Variables pour la stabilisation des capteurs IR - VERSION SIMPLIFI├ëE        
+// Variables pour la stabilisation des capteurs IR - VERSION SIMPLIFIÉE        
 #define IR_SAMPLE_SIZE 10        // Taille de la moyenne mobile (ajustable)        
 #define IR_MAX_DEVIATION 50      // Limite des écarts autorisés (ajustable)        
         
@@ -274,7 +274,7 @@ uint8_t rgb2GreenDimmed = 0;     // RGB2 vert dimmé
 uint8_t rgb2BlueDimmed = 0;      // RGB2 bleu dimmé        
         
 // Variables pour la transposition du pitch        
-int8_t transpose = 0;           // Valeur de transposition (-12 ├á +12)        
+int8_t transpose = 0;           // Valeur de transposition (-12 à +12)        
 uint8_t transpose_factor = 24;  // Facteur de transposition        
         
 // Prototypes        
@@ -299,7 +299,7 @@ int stabilizeIRSensor(int newValue, int* buffer, int& index, int& sum, bool& ini
   int deviation = abs(newValue - currentAverage);        
           
   if (deviation > IR_MAX_DEVIATION) {        
-    // Valeur aberrante : la limiter ├á moyenne ┬▒ seuil        
+    // Valeur aberrante : la limiter à moyenne ┬▒ seuil        
     int limitedValue;        
     if (newValue > currentAverage) {        
       limitedValue = currentAverage + IR_MAX_DEVIATION;        
@@ -307,7 +307,7 @@ int stabilizeIRSensor(int newValue, int* buffer, int& index, int& sum, bool& ini
       limitedValue = currentAverage - IR_MAX_DEVIATION;        
     }        
             
-    // Mettre ├á jour le buffer avec la valeur limitée        
+    // Mettre à jour le buffer avec la valeur limitée        
     sum -= buffer[index];        
     buffer[index] = limitedValue;        
     sum += limitedValue;        
@@ -318,7 +318,7 @@ int stabilizeIRSensor(int newValue, int* buffer, int& index, int& sum, bool& ini
     sum += newValue;        
   }        
           
-  // Passer ├á l'index suivant (buffer circulaire)        
+  // Passer à l'index suivant (buffer circulaire)        
   index = (index + 1) % IR_SAMPLE_SIZE;        
           
   // Retourner la moyenne        
@@ -332,7 +332,7 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
         
         
         
-// Fonction pour mettre ├á jour un paramètre par son nom        
+// Fonction pour mettre à jour un paramètre par son nom        
 void setParameter(const char* paramName, uint8_t value) {        
   for (int i = 0; i < PRESET_SIZE; i++) {        
     if (strcmp(parameters[i].name, paramName) == 0) {        
@@ -346,7 +346,7 @@ void setParameter(const char* paramName, uint8_t value) {
         if (transposedValue > 255) transposedValue = 255;        
                 
         parameters[i].value = (uint8_t)transposedValue;        
-        // Mettre ├á jour le tableau DMX        
+        // Mettre à jour le tableau DMX        
         dmxValues[parameters[i].dmxChannel - 1] = (uint8_t)transposedValue;        
                 
         // Debug de la transposition        
@@ -361,7 +361,7 @@ void setParameter(const char* paramName, uint8_t value) {
       } else {        
         // Pour les autres paramètres, comportement normal        
         parameters[i].value = value;        
-        // Mettre ├á jour le tableau DMX        
+        // Mettre à jour le tableau DMX        
         dmxValues[parameters[i].dmxChannel - 1] = value;        
       }        
       return;        
@@ -370,7 +370,7 @@ void setParameter(const char* paramName, uint8_t value) {
   //Serial.println("Paramètre " + String(paramName) + " non trouvé");        
 }        
         
-// Fonction pour mettre ├á jour le gate_threshold avec la transposition        
+// Fonction pour mettre à jour le gate_threshold avec la transposition        
 void updateGateThresholdWithTranspose() {        
   // Récupérer la valeur par défaut du preset pour gate_threshold        
   uint8_t originalGateThreshold = presets[selectedPreset].values[7]; // indice 7 = gate_threshold        
@@ -382,7 +382,7 @@ void updateGateThresholdWithTranspose() {
   if (transposedGateThreshold < 0) transposedGateThreshold = 0;        
   if (transposedGateThreshold > 255) transposedGateThreshold = 255;        
           
-  // Mettre ├á jour le paramètre        
+  // Mettre à jour le paramètre        
   parameters[7].value = (uint8_t)transposedGateThreshold;        
   dmxValues[parameters[7].dmxChannel - 1] = (uint8_t)transposedGateThreshold;        
           
@@ -434,8 +434,8 @@ uint8_t getParameter(const char* paramName) {
 // Variables globales pour stocker les liens des contrôles physiques        
 // REMOVED: Les liens sont maintenant lus dynamiquement depuis le preset actuel        
         
-// Fonction pour mettre ├á jour les liens des contrôles physiques depuis le preset actuel        
-// REMOVED: Plus nécessaire car les liens sont lus ├á chaque appel        
+// Fonction pour mettre à jour les liens des contrôles physiques depuis le preset actuel        
+// REMOVED: Plus nécessaire car les liens sont lus à chaque appel        
         
 // Fonction pour sauvegarder un preset        
 void savePreset(uint8_t presetIndex, const char* presetName) {        
@@ -469,7 +469,7 @@ void loadPreset(uint8_t presetIndex) {
     dmxValues[parameters[i].dmxChannel - 1] = parameters[i].value;        
   }        
           
-  // Les liens des contrôles physiques sont maintenant lus dynamiquement ├á chaque appel        
+  // Les liens des contrôles physiques sont maintenant lus dynamiquement à chaque appel        
           
   Serial.println("Preset " + String(presetIndex) + " chargé: " + String(presets[presetIndex].name));        
 }        
@@ -538,7 +538,7 @@ uint8_t rgb2_blue, // 37
 uint8_t dimmer1_source, // 38        
 uint8_t dimmer2_source) { // 39        
           
-  // Mettre ├á jour tous les paramètres existants (0-23)        
+  // Mettre à jour tous les paramètres existants (0-23)        
   parameters[0].value = autopan_depth;        
   parameters[1].value = pitch;        
   parameters[2].value = vibrato_speed;        
@@ -564,7 +564,7 @@ uint8_t dimmer2_source) { // 39
   parameters[22].value = filter_reso;        
   parameters[23].value = filter_type;        
           
-  // Mettre ├á jour les nouveaux paramètres (24-39)        
+  // Mettre à jour les nouveaux paramètres (24-39)        
   parameters[24].value = ir1_target_param;        
   parameters[25].value = ir2_target_param;        
   parameters[26].value = fader1_target_param;        
@@ -582,12 +582,12 @@ uint8_t dimmer2_source) { // 39
   parameters[38].value = dimmer1_source;        
   parameters[39].value = dimmer2_source;        
           
-  // Mettre ├á jour le tableau DMX        
+  // Mettre à jour le tableau DMX        
   for (int i = 0; i < PRESET_SIZE; i++) {        
     dmxValues[parameters[i].dmxChannel - 1] = parameters[i].value;        
   }        
           
-  //Serial.println("Tous les paramètres mis ├á jour");        
+  //Serial.println("Tous les paramètres mis à jour");        
   printParameters();        
 }        
         
@@ -616,7 +616,7 @@ int readStabilizedIRSensor(int sensorPin, int* buffer, int& index, int& sum, boo
         
 // Fonction pour mapping amélioré d'IR1 (pitch)        
 uint8_t mapIR1Logarithmic(int rawValue) {        
-  // Normaliser la valeur d'entrée (0-4095 ΓåÆ 0.0-1.0)        
+  // Normaliser la valeur d'entrée (0-4095 à 0.0-1.0)        
   float normalized = (float)rawValue / 4095.0;        
           
   // Mapping exponentiel inverse pour plus de contrôle dans les petites distances        
@@ -632,7 +632,7 @@ uint8_t mapIR1Logarithmic(int rawValue) {
 // Fonction pour mapping linéaire d'IR1 (dimmer)        
 uint8_t mapIR1Linear(int rawValue) {        
   // Mapping linéaire simple pour les dimmers        
-  return rawValue / 16; // 0-4095 ΓåÆ 0-255        
+  return rawValue / 16; // 0-4095 à 0-255        
 }        
         
 // Fonction pour lire la valeur d'un contrôle assigné (0-4)        
@@ -653,7 +653,7 @@ uint8_t getControlValue(uint8_t source) {
   }        
 }        
         
-// Fonction pour mettre ├á jour le dimmer RGB avec inertie        
+// Fonction pour mettre à jour le dimmer RGB avec inertie        
 void updateRGBWithDimmer() {        
   // En mode web, utiliser les valeurs RGB du preset web courant        
   uint8_t rgb1Red, rgb1Green, rgb1Blue, rgb2Red, rgb2Green, rgb2Blue;        
@@ -671,7 +671,7 @@ void updateRGBWithDimmer() {
     rgb1Red = parameters[24].value;    // rgb1_red        
     rgb1Green = parameters[25].value;  // rgb1_green        
     rgb1Blue = parameters[26].value;   // rgb1_blue        
-    // Pour RGB2, utiliser les m├¬mes valeurs RGB que RGB1 en mode web        
+    // Pour RGB2, utiliser les mêmes valeurs RGB que RGB1 en mode web        
     rgb2Red = parameters[24].value;        
     rgb2Green = parameters[25].value;        
     rgb2Blue = parameters[26].value;        
@@ -694,7 +694,7 @@ void updateRGBWithDimmer() {
           
         
           
-  // Mapping 50-255 ΓåÆ 0-255 (en dessous de 50 = éteint)        
+  // Mapping 50-255 à 0-255 (en dessous de 50 = éteint)        
   float rawDimmer1 = (float)control1Value / 255.0;        
   float rawDimmer2 = (float)control2Value / 255.0;        
           
@@ -744,7 +744,7 @@ void handlePhysicalControls() {
   if (selectedPreset == 0) {        
     webModeActive = true;        
     handleWebPhysicalControls();        
-    return; // IMPORTANT: Arr├¬ter complètement l'exécution ici        
+    return; // IMPORTANT: Arrêter complètement l'exécution ici        
   } else {        
     webModeActive = false;        
   }        
@@ -753,10 +753,10 @@ void handlePhysicalControls() {
   int stabilizedIR1 = readStabilizedIRSensor(DIST_SENSOR_1_PIN, irBuffer1, irIndex1, irSum1, irInitialized1);        
   int stabilizedIR2 = readStabilizedIRSensor(DIST_SENSOR_2_PIN, irBuffer2, irIndex2, irSum2, irInitialized2);        
   uint8_t ir1Value = mapIR1Logarithmic(stabilizedIR1); // Mapping amélioré pour IR1        
-  uint8_t ir2Value = stabilizedIR2 / 16; // 0-4095 ΓåÆ 0-255        
+  uint8_t ir2Value = stabilizedIR2 / 16; // 0-4095 à 0-255        
           
-  // Lecture des faders (inversés : 4095-0 ΓåÆ 0-255)        
-  //uint8_t fader1Value = (4095 - analogRead(FADER_1_PIN)) / 16; // 4095-0 ΓåÆ 0-255        
+  // Lecture des faders (inversés : 4095-0 à 0-255)        
+  //uint8_t fader1Value = (4095 - analogRead(FADER_1_PIN)) / 16; // 4095-0 à 0-255        
   uint8_t fader1Value = 0; // fader1 cassé, on le remplace par 0 en attendant de le réparer        
   uint8_t fader2Value = (4095 - analogRead(FADER_2_PIN)) / 16;        
   uint8_t fader3Value = (4095 - analogRead(FADER_3_PIN)) / 16;        
@@ -794,28 +794,7 @@ void handlePhysicalControls() {
     }        
         
         
-  // Gestion conditionnelle des faders selon l'état du filtre        
-  //uint8_t filterState = getParameter("filter_on_off");         
-        
-  // if (filterState == 0) {        
-  //   // Filter OFF : fader1 ΓåÆ vibrato_speed, fader2 ΓåÆ delay_time, fader3 ΓåÆ delay_feedback        
-  //   setParameter("vibrato_speed", fader1Value);   // Paramètre 3        
-  //   setParameter("delay_time", fader2Value);      // Paramètre 5        
-  //   setParameter("delay_feedback", fader3Value);  // Paramètre 6        
-  // } else {        
-  //   // Filter ON : utiliser les assignations du preset        
-  //   if (fader1TargetParam >= 0 && fader1TargetParam < PRESET_SIZE) {        
-  //     setParameter(parameters[fader1TargetParam].name, fader1Value);        
-  //   }        
-            
-  //   if (fader2TargetParam >= 0 && fader2TargetParam < PRESET_SIZE) {        
-  //     setParameter(parameters[fader2TargetParam].name, fader2Value);        
-  //   }        
-            
-  //   if (fader3TargetParam >= 0 && fader3TargetParam < PRESET_SIZE) {        
-  //     setParameter(parameters[fader3TargetParam].name, fader3Value);        
-  //   }        
-  // }        
+  
           
   // Gestion du bouton 3 avec valeurs released/pressed        
   if (button3TargetParam > 0 && button3TargetParam < PRESET_SIZE) {        
@@ -825,157 +804,13 @@ void handlePhysicalControls() {
     setParameter(parameters[button3TargetParam].name, button3TargetValue);        
   }        
           
-  // Mettre ├á jour le dimmer RGB        
+  // Mettre à jour le dimmer RGB        
   updateRGBWithDimmer();        
           
-  // Debug (optionnel)        
-  static unsigned long lastDebugTime = 0;        
-  // if (millis() - lastDebugTime > 1000) { // Debug toutes les secondes        
-  //   Serial.print("Contrôles - IR1:");        
-  //   Serial.print(ir1Value);        
-  //   Serial.print(" IR2:");        
-  //   Serial.print(ir2Value);        
-  //   Serial.print(" F1:");        
-  //   Serial.print(fader1Value);        
-  //   Serial.print(" F2:");        
-  //   Serial.print(fader2Value);        
-  //   Serial.print(" F3:");        
-  //   Serial.print(fader3Value);        
-  //   Serial.print(" B3:");        
-  //   Serial.print(button3State ? "ON" : "OFF");        
-  //   Serial.println();        
-  //   lastDebugTime = millis();        
-  // }        
-}        
-        
-// Fonction d'initialisation du rotary encoder (désactivée - encoder non c├óblé)        
-/*        
-void initializeEncoder() {        
-  // Configuration des pins du rotary encoder        
-  encoder.attachHalfQuad(ENCODER_A_PIN, ENCODER_B_PIN);        
-  encoder.setCount(0);        
-          
-  // Configuration du bouton (optionnel)        
-  pinMode(ENCODER_BUTTON_PIN, INPUT_PULLUP);        
-          
-  Serial.println("=== ROTARY ENCODER INITIALIS├ë ===");        
-  Serial.println("Pins configurés:");        
-  Serial.print("  - Pin A (CLK): D5 (GPIO18)");        
-  Serial.println(" Γ£ô");        
-  Serial.print("  - Pin B (DT): D6 (GPIO19)");        
-  Serial.println(" Γ£ô");        
-  Serial.print("  - Bouton (SW): D7 (GPIO23)");        
-  Serial.println(" Γ£ô");        
-  Serial.println("");        
-  Serial.println("=== CONTROLES ===");        
-  Serial.println("≡ƒöä Rotation: Modifie la valeur du paramètre actuel");        
-  Serial.println("≡ƒöÿ Bouton: Change de paramètre (cycle 0-19)");        
-  Serial.println("≡ƒôè Monitor: Affiche les changements en temps réel");        
-  Serial.println("=====================================");        
-}        
-*/        
-        
-// Fonction pour gérer le rotary encoder (désactivée - encoder non c├óblé)        
-/*        
-void handleEncoder() {        
-  // Lecture de la valeur actuelle du rotary encoder        
-  int32_t currentEncoderValue = encoder.getCount();        
-          
-  // Si la valeur a changé, mettre ├á jour le paramètre sélectionné        
-  if (currentEncoderValue != lastEncoderValue) {        
-    int32_t delta = currentEncoderValue - lastEncoderValue;        
-            
-    // Obtenir la valeur actuelle du paramètre sélectionné        
-    uint8_t currentValue = parameters[selectedParameter].value;        
-            
-    // Ajuster la valeur en fonction de la rotation        
-    int newValue = currentValue + (delta * 2); // Multiplier par 2 pour un contrôle plus sensible        
-            
-    // Limiter la valeur entre 0 et 255        
-    if (newValue < 0) newValue = 0;        
-    if (newValue > 255) newValue = 255;        
-            
-    // Mettre ├á jour le paramètre        
-    parameters[selectedParameter].value = (uint8_t)newValue;        
-    dmxValues[parameters[selectedParameter].dmxChannel - 1] = (uint8_t)newValue;        
-            
-    // Afficher les informations détaillées de debug        
-    Serial.print("≡ƒöä ROTATION: ");        
-    if (delta > 0) {        
-      Serial.print("+");        
-    }        
-    Serial.print(delta);        
-    Serial.print(" | Encoder: ");        
-    Serial.print(currentEncoderValue);        
-    Serial.print(" | ");        
-    Serial.print(parameters[selectedParameter].name);        
-    Serial.print(" (DMX ");        
-    Serial.print(parameters[selectedParameter].dmxChannel);        
-    Serial.print("): ");        
-    Serial.print(currentValue);        
-    Serial.print(" ΓåÆ ");        
-    Serial.print((uint8_t)newValue);        
-    Serial.print(" [");        
-    Serial.print((uint8_t)newValue * 100 / 255);        
-    Serial.println("%]");        
-            
-    lastEncoderValue = currentEncoderValue;        
-  }        
-          
-  // Gestion du bouton pour changer de paramètre        
-  bool buttonState = !digitalRead(ENCODER_BUTTON_PIN); // Inversé car INPUT_PULLUP        
-          
-  if (buttonState && !encoderButtonPressed && (millis() - lastButtonPress > BUTTON_DEBOUNCE)) {        
-    selectedParameter = (selectedParameter + 1) % PRESET_SIZE; // Passer au paramètre suivant        
-            
-    Serial.println("≡ƒöÿ BOUTON PRESS├ë - Changement de paramètre");        
-    Serial.print("  ≡ƒôï Paramètre ");        
-    Serial.print(selectedParameter);        
-    Serial.print("/19: '");        
-    Serial.print(parameters[selectedParameter].name);        
-    Serial.print("'");        
-    Serial.println("");        
-    Serial.print("  ≡ƒôí DMX Channel: ");        
-    Serial.print(parameters[selectedParameter].dmxChannel);        
-    Serial.print(" | Valeur actuelle: ");        
-    Serial.print(parameters[selectedParameter].value);        
-    Serial.print(" [");        
-    Serial.print(parameters[selectedParameter].value * 100 / 255);        
-    Serial.println("%]");        
-    Serial.println("  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ");        
-            
-    encoderButtonPressed = true;        
-    lastButtonPress = millis();        
-  }        
-          
-  if (!buttonState) {        
-    encoderButtonPressed = false;        
-  }        
-          
-  // Affichage périodique du statut du rotary encoder        
-  if (millis() - lastEncoderStatusTime >= ENCODER_STATUS_INTERVAL) {        
-    Serial.println("≡ƒôè STATUT ROTARY ENCODER:");        
-    Serial.print("  ≡ƒÄ» Paramètre actuel: ");        
-    Serial.print(selectedParameter);        
-    Serial.print("/19 - '");        
-    Serial.print(parameters[selectedParameter].name);        
-    Serial.println("'");        
-    Serial.print("  ≡ƒôí DMX Channel: ");        
-    Serial.print(parameters[selectedParameter].dmxChannel);        
-    Serial.print(" | Valeur: ");        
-    Serial.print(parameters[selectedParameter].value);        
-    Serial.print(" [");        
-    Serial.print(parameters[selectedParameter].value * 100 / 255);        
-    Serial.println("%]");        
-    Serial.print("  ≡ƒöó Compteur encoder: ");        
-    Serial.println(encoder.getCount());        
-    Serial.println("  ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ");        
-            
-    lastEncoderStatusTime = millis();        
-  }        
-}        
-*/        
-        
+    // Debug (optionnel)        
+  static unsigned long lastDebugTime = 0;
+}
+
 /*Paramètres Ksoloti        
 1 autopan depth        
 2 pitch        
@@ -1026,79 +861,13 @@ Targets : (0=IR1, 1=IR2, 2=Fader1, 3=Fader2, 4=Fader3)
 //                           |vibraspeed     |osc            |octlow        |tonic          |hh         |cutoff         |ir2            |button3        /g1             /b2        
 //                               |vibradepth     |gate           |osc2vol       |drums         |master     |reso            |fader1         |b3_rel         /b1             /dim1        
         
-    // Preset 2 - Classical scale        
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39          
-  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0, 0,  0,  0,  0);        
-  savePreset(2, "Classical scale");        
-        
-      // Preset 3 - Classical scale siren        
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39          
-  setAllParameters(  0,  0, 100, 3, 74, 83,100,155,213,255,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15, 14,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);        
-  savePreset(3, "Classical scale siren");        
         
       // Preset 0 - WEB MODE (pas d'assignations physiques)        
   //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39          
   setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  50,255,0,  50,  0,  0);        
   savePreset(0, "WEB MODE");        
         
-  // Preset 6 - Buzz1        
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39          
-  setAllParameters(  0,  0, 59, 16, 74, 83,100,155,213,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1, 15,  2,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);        
-  savePreset(6, "Buzz1");        
-        
-  // Preset 1 - Bass growler        
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39          
-  setAllParameters(  0,  0, 59, 16, 74, 83,255,100,213,  0,  0,255,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  0, 12,  4,  5, 18,  0,  5,255,  0,  50,255,0,  50,  0,  0);        
-  savePreset(1, "Bass growler");        
-          
-        
-  // Preset 5 - Furious octaver growl feedbacker        
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39          
-  setAllParameters(  0,150,221, 10, 74,241,255,  0, 91,255,  0,255,196,  0,  0,255,  0,  0,  0, 50,  0,  0,  0,  0, 12,  3, 21, 22, 6, 18,  0,  5,255,  0,  0,  0,255,  0,  0,  1);        
-  savePreset(5, "FuriousGrowl");        
-        
-        
-        
-        
-    // Preset 7 - ├Ç définir        
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39          
-  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  120, 75, 50,  0,150, 150,  0, 0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3, 21, 22, 23, 18,  0,  5,  0,255, 15,200,10, 255, 0,  0);        
-  savePreset(7, "Preset7");        
-        
-        
-        
-  // Preset 4 - Simple sans effet        
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39          
-  setAllParameters(  0,  0, 64, 10,  0,  0,100,  80, 75,  0,  0,  0,  0,  0,  0,255,  0,  0,  0, 0,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0,  0,  1);        
-  savePreset(4, "Simple");        
-          
-  // Preset 1 - Simple avec effet        
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39          
-  setAllParameters(  0,  0,  0,  0,130,110,100, 100, 30,  0,255,  0,  0,  0,  0,255,  0,  0,  0, 0,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,255,  0,  0,  0,  1);        
-  savePreset(8, "Simple+Effet");        
-          
-  // // Preset 2 - Octaver and growl        
-  // //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39          
-  // setAllParameters(  0,  0, 64, 10, 90,110,145,  0, 75,255,  0,255,140,  0,  0,255,  0,  0,  0, 0,  0,  0,  0,  0,  1,  3,  21, 22, 23, 18,  0,  5,255,255,  50,  0,255,255,  0,  1);        
-  // savePreset(2, "OctaverGrowl");        
-          
-  // // Preset 3 - Modern siren vibrafrenzy        
-  // //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39          
-  // setAllParameters(  0,  0,162,129,140,167,205,  0,108,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,100,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,255,  0, 50,  0,  1);        
-  // savePreset(3, "ModernSiren");        
-          
-        
-          
-          
-        
-          
-        
-          
-          
-  // Preset 9 - ├Ç définir        
-  //                 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21  22  23  24  25  26  27  28  29  30  31  32  33  34  35  36  37  38  39          
-  setAllParameters(  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,255,  0,  0,  0,  0,  0,  0,  0,  0,  1,  3,  2,  4,  5, 18,  0,  5,255,  0,  0,  0,255,  0,  0,  1);        
-  savePreset(9, "Preset9");        
+       
           
   Serial.println("Presets initialisés");        
 }        
@@ -1169,7 +938,7 @@ void initializeUserInterface() {
   Serial.println("Interface utilisateur initialisée");        
 }        
         
-// Fonction pour lire les capteurs Sharp IR avec stabilisation - NOUVELLE STRAT├ëGIE        
+// Fonction pour lire les capteurs Sharp IR avec stabilisation - NOUVELLE STRATÉGIE        
 void readSharpIRSensors() {        
   // Lecture stabilisée du premier capteur Sharp IR        
   int stabilizedValue1 = readStabilizedIRSensor(DIST_SENSOR_1_PIN, irBuffer1, irIndex1, irSum1, irInitialized1);        
@@ -1198,7 +967,7 @@ void readFaders() {
   faderValues[1] = analogRead(FADER_2_PIN) / 16;        
   faderValues[2] = analogRead(FADER_3_PIN) / 16;        
           
-  // Mise ├á jour des paramètres selon les faders        
+  // Mise à jour des paramètres selon les faders        
   if (faderValues[0] != lastFaderValues[0]) {        
     setParameter("filter_cutoff", faderValues[0]);        
     lastFaderValues[0] = faderValues[0];        
@@ -1264,7 +1033,7 @@ void handleButtonInterrupts() {
       // Recharger le preset pour appliquer la nouvelle transposition        
       loadPreset(selectedPreset);        
               
-      // Mettre ├á jour le gate_threshold avec la nouvelle transposition        
+      // Mettre à jour le gate_threshold avec la nouvelle transposition        
       updateGateThresholdWithTranspose();        
     } else if (selectedPreset == 0) {        
       Serial.println("Bouton 1 - Transposition désactivée en mode web");        
@@ -1286,7 +1055,7 @@ void handleButtonInterrupts() {
       // Recharger le preset pour appliquer la nouvelle transposition        
       loadPreset(selectedPreset);        
               
-      // Mettre ├á jour le gate_threshold avec la nouvelle transposition        
+      // Mettre à jour le gate_threshold avec la nouvelle transposition        
       updateGateThresholdWithTranspose();        
     } else if (selectedPreset == 0) {        
       Serial.println("Bouton 2 - Transposition désactivée en mode web");        
@@ -1342,7 +1111,7 @@ void handleEncoder() {
     Serial.print(selectedPreset);        
     Serial.print(" - ");        
     Serial.println(presets[selectedPreset].name);        
-    Serial.println("Transposition réinitialisée ├á 0");        
+    Serial.println("Transposition réinitialisée à 0");        
   }        
           
   // Gestion du bouton de l'encodeur (toggle filtre)        
@@ -1363,7 +1132,7 @@ void handleEncoder() {
     Serial.print("Filtre: ");        
     Serial.println((newFilterState == 255) ? "ON" : "OFF");        
             
-    // Attendre 500ms puis revenir ├á l'affichage unifié        
+    // Attendre 500ms puis revenir à l'affichage unifié        
     delay(500);        
     displayUnified();        
             
@@ -1378,11 +1147,11 @@ void handleEncoder() {
         
 // Fonction pour afficher la transposition et le preset de manière unifiée        
 void displayUnified() {        
-  // Format: TTPP o├╣ TT = transposition/octave (-12 ├á +12) et PP = preset (0-9)        
+  // Format: TTPP où TT = transposition/octave (-12 à +12) et PP = preset (0-9)        
   // Exemples:         
-  // - Transposition +5, preset 3 ΓåÆ "0503"         
-  // - Transposition -2, preset 7 ΓåÆ "-207"        
-  // - Octave web +3, preset 0 ΓåÆ "0300"        
+  // - Transposition +5, preset 3 à "0503"         
+  // - Transposition -2, preset 7 à "-207"        
+  // - Octave web +3, preset 0 à "0300"        
           
   uint8_t segments[4] = {0, 0, 0, 0};        
           
@@ -1415,14 +1184,14 @@ void displayUnified() {
   }        
           
   // Calcul pour les digits du preset (positions 2 et 3)        
-  segments[2] = display.encodeDigit(0); // Toujours 0 car preset va de 0 ├á 9        
+  segments[2] = display.encodeDigit(0); // Toujours 0 car preset va de 0 à 9        
   segments[3] = display.encodeDigit(selectedPreset);        
           
   // Afficher les segments        
   display.setSegments(segments);        
 }        
         
-// Fonction pour mettre ├á jour l'afficheur TM1637        
+// Fonction pour mettre à jour l'afficheur TM1637        
 void updateDisplay() {        
   if (millis() - lastDisplayUpdate >= DISPLAY_UPDATE_INTERVAL) {        
     // Utiliser la nouvelle fonction d'affichage unifiée        
@@ -1445,7 +1214,7 @@ void setup()
   Serial.print("Adresse MAC ESP32: ");        
   Serial.println(WiFi.macAddress());        
           
-  // Initialisation du tableau DMX ├á 0        
+  // Initialisation du tableau DMX à 0        
   for (int i = 0; i < 512; i++) {        
     dmxValues[i] = 0;        
   }        
@@ -1510,8 +1279,8 @@ void setup()
   Serial.println("  Format d'affichage: TTPP (TT=transposition, PP=preset)");        
   Serial.println("  Exemples: 0501=transpose +5/preset 1, -203=transpose -2/preset 3");        
   Serial.println("Boutons push sur GPIO21, GPIO22, GPIO23");        
-  Serial.println("Bouton 1: Décrémenter transposition (-12 ├á +12)");        
-  Serial.println("Bouton 2: Incrémenter transposition (-12 ├á +12)");        
+  Serial.println("Bouton 1: Décrémenter transposition (-12 à +12)");        
+  Serial.println("Bouton 2: Incrémenter transposition (-12 à +12)");        
   Serial.println("Bouton 3: Trig HH");        
   Serial.println("Bouton encodeur: Toggle filtre ON/OFF");        
         
@@ -1566,12 +1335,12 @@ void setlights()
   dmxValues[2] = rgb1GreenDimmed;  // Canal DMX 3 (G)         
   dmxValues[3] = rgb1BlueDimmed;   // Canal DMX 4 (B)        
           
-  // Mise ├á jour du ruban WS2812B avec RGB2 dimmé par IR2        
+  // Mise à jour du ruban WS2812B avec RGB2 dimmé par IR2        
   for (int i = 0; i < NUM_LEDS; i++) {        
     leds[i] = CRGB(rgb2RedDimmed, rgb2GreenDimmed, rgb2BlueDimmed);        
   }        
           
-  // Mettre ├á jour l'affichage        
+  // Mettre à jour l'affichage        
   FastLED.show();        
 }        
         
@@ -1597,7 +1366,7 @@ void testInputs() {
   bool encoderButtonState = !digitalRead(ENCODER_BUTTON_PIN);        
           
   // Mapper les faders sur 0-255 pour DMX 2, 3, 4 (inversés)        
-  uint8_t fader1Mapped = (4095 - fader1Raw) / 16; // 4095-0 ΓåÆ 0-255        
+  uint8_t fader1Mapped = (4095 - fader1Raw) / 16; // 4095-0 à 0-255        
   uint8_t fader2Mapped = (4095 - fader2Raw) / 16;        
   uint8_t fader3Mapped = (4095 - fader3Raw) / 16;        
           
@@ -1637,20 +1406,20 @@ void testInputs() {
           
   // En mode test, afficher l'encodeur sur les 4 digits        
   display.clear();        
-  uint16_t displayValue = abs(testEncoderValue) % 10000; // Limiter ├á 4 chiffres        
+  uint16_t displayValue = abs(testEncoderValue) % 10000; // Limiter à 4 chiffres        
   display.showNumberDec(displayValue);        
           
-  // Mettre ├á jour le LED strip avec les valeurs DMX 2, 3, 4        
+  // Mettre à jour le LED strip avec les valeurs DMX 2, 3, 4        
   uint8_t redValue = dmxValues[1];    // Canal DMX 2 (R)        
   uint8_t greenValue = dmxValues[2];  // Canal DMX 3 (G)         
   uint8_t blueValue = dmxValues[3];   // Canal DMX 4 (B)        
           
-  // Appliquer la couleur RGB ├á tous les LEDs du ruban        
+  // Appliquer la couleur RGB à tous les LEDs du ruban        
   for (int i = 0; i < NUM_LEDS; i++) {        
     leds[i] = CRGB(redValue, greenValue, blueValue);        
   }        
           
-  // Mettre ├á jour l'affichage        
+  // Mettre à jour l'affichage        
   FastLED.show();        
 }        
         
@@ -1686,7 +1455,7 @@ void loop()
   // Gestion des boutons push        
   handleButtonInterrupts();        
           
-  // Gestion du serveur web (limité ├á 10Hz pour éviter la surcharge)        
+  // Gestion du serveur web (limité à 10Hz pour éviter la surcharge)        
   static unsigned long lastWebServerUpdate = 0;        
   if (millis() - lastWebServerUpdate >= 100) { // 100ms = 10Hz        
     webServer.handleClient();        
@@ -1696,10 +1465,10 @@ void loop()
   // Gestion de l'encodeur KY-040        
  // handleEncoder();        
           
-  // Mise ├á jour de l'afficheur TM1637        
+  // Mise à jour de l'afficheur TM1637        
   updateDisplay();        
           
-  // ├ëmission ├á fréquence fixe (50Hz)        
+  // Émission à fréquence fixe (50Hz)        
   if (millis() - lastEmissionTime >= EMISSION_INTERVAL) {        
             
     setlights();        
@@ -1711,38 +1480,38 @@ void loop()
 }        
         
 // ============================================================================        
-// IMPL├ëMENTATION DES FONCTIONS DE L'INTERFACE WEB        
+// IMPLÉMENTATION DES FONCTIONS DE L'INTERFACE WEB        
 // ============================================================================        
         
 // Initialisation du système de fichiers et du serveur web        
 void setupWebInterface() {        
   // Initialiser le système de fichiers avec formatage forcé si nécessaire        
-  Serial.println("≡ƒöº Initialisation de LittleFS...");        
+  Serial.println("Initialisation de LittleFS...");        
   if (!LittleFS.begin(true)) {        
-    Serial.println("Γ¥î Première tentative échouée, formatage forcé...");        
+    Serial.println("Première tentative échouée, formatage forcé...");        
     LittleFS.format();        
     if (!LittleFS.begin(true)) {        
-      Serial.println("Γ¥î Erreur: Impossible d'initialiser LittleFS m├¬me après formatage");        
+      Serial.println("Erreur: Impossible d'initialiser LittleFS même après formatage");        
       return;        
     }        
   }        
-  Serial.println("Γ£à LittleFS initialisé avec succès");        
+  Serial.println("LittleFS initialisé avec succès");        
           
   // Vérifier que l'écriture fonctionne en créant un fichier de test        
   File testFile = LittleFS.open("/test.txt", "w");        
   if (testFile) {        
     testFile.println("Test d'écriture LittleFS");        
     testFile.close();        
-    Serial.println("Γ£à Test d'écriture LittleFS réussi");        
+    Serial.println("Test d'écriture LittleFS réussi");        
     LittleFS.remove("/test.txt"); // Nettoyer le fichier de test        
   } else {        
-    Serial.println("Γ¥î Erreur: Impossible d'écrire dans LittleFS");        
+    Serial.println(" Erreur: Impossible d'écrire dans LittleFS");        
   }        
           
   // Lister les fichiers disponibles        
   File root = LittleFS.open("/");        
   File file = root.openNextFile();        
-  Serial.println("≡ƒôü Fichiers disponibles dans LittleFS:");        
+  Serial.println(" Fichiers disponibles dans LittleFS:");        
   while (file) {        
     Serial.print("  - ");        
     Serial.print(file.name());        
@@ -1754,11 +1523,11 @@ void setupWebInterface() {
           
   // Créer le point d'accès WiFi        
   WiFi.softAP(AP_SSID, AP_PASSWORD);        
-  Serial.print("≡ƒôí Point d'accès WiFi créé: ");        
+  Serial.print("Point d'accès WiFi créé: ");        
   Serial.println(AP_SSID);        
-  Serial.print("≡ƒöæ Mot de passe: ");        
+  Serial.print("Mot de passe: ");        
   Serial.println(AP_PASSWORD);        
-  Serial.print("≡ƒîÉ Adresse IP: ");        
+  Serial.print("Adresse IP: ");        
   Serial.println(WiFi.softAPIP());        
           
   // Configurer les routes du serveur web        
@@ -1766,18 +1535,18 @@ void setupWebInterface() {
           
   // Démarrer le serveur web        
   webServer.begin();        
-  Serial.println("≡ƒîÉ Serveur web démarré");        
+  Serial.println("Serveur web démarré");        
           
   // Initialiser les tableaux de presets web        
   for (int i = 0; i < MAX_WEB_PRESETS; i++) {        
     webPresets[i].name[0] = '\0'; // Marquer les slots comme vides        
-    webPresets[i].octave = 0;     // Initialiser l'octave ├á 0        
+    webPresets[i].octave = 0;     // Initialiser l'octave à 0        
   }        
           
   // Charger les presets web et assignations        
-  Serial.println("≡ƒöä Début du chargement des presets web...");        
+  Serial.println("Début du chargement des presets web...");        
   loadWebPresets();        
-  Serial.println("≡ƒöä Début du chargement des assignations web...");        
+  Serial.println("Début du chargement des assignations web...");        
   loadWebAssignments();        
 }        
         
@@ -1817,13 +1586,13 @@ void setupWebRoutes() {
   // API pour récupérer les paramètres        
   webServer.on("/api/parameters", HTTP_GET, handleGetParameters);        
           
-  // API pour mettre ├á jour un paramètre        
+  // API pour mettre à jour un paramètre        
   webServer.on("/api/parameters", HTTP_POST, handleUpdateParameter);        
           
   // API pour récupérer les assignations        
   webServer.on("/api/assignments", HTTP_GET, handleGetAssignments);        
           
-  // API pour mettre ├á jour les assignations        
+  // API pour mettre à jour les assignations        
   webServer.on("/api/assignments", HTTP_POST, handleUpdateAssignments);        
           
   // API pour sauvegarder un preset web        
@@ -1846,7 +1615,7 @@ void setupWebRoutes() {
         
 // API: Récupérer les paramètres        
 void handleGetParameters() {        
-  Serial.println("≡ƒôè GET /api/parameters - Début");        
+  Serial.println("DEBUG: GET /api/parameters - Début");        
           
   DynamicJsonDocument doc(1024);        
   JsonArray paramsArray = doc.createNestedArray("parameters");        
@@ -1867,11 +1636,11 @@ void handleGetParameters() {
   String response;        
   serializeJson(doc, response);        
           
-  Serial.println("≡ƒôè GET /api/parameters - Réponse envoyée: " + response);        
+  Serial.println("DEBUG: GET /api/parameters - Réponse envoyée: " + response);        
   webServer.send(200, "application/json", response);        
 }        
         
-// API: Mettre ├á jour un paramètre        
+// API: Mettre à jour un paramètre        
 void handleUpdateParameter() {        
   if (webServer.hasArg("plain")) {        
     DynamicJsonDocument doc(512);        
@@ -1886,7 +1655,7 @@ void handleUpdateParameter() {
               
       DynamicJsonDocument response(128);        
       response["success"] = true;        
-      response["message"] = "Paramètre mis ├á jour";        
+      response["message"] = "Paramètre mis à jour";        
               
       String responseStr;        
       serializeJson(response, responseStr);        
@@ -1917,7 +1686,7 @@ void handleGetAssignments() {
   webServer.send(200, "application/json", response);        
 }        
         
-// API: Mettre ├á jour les assignations        
+// API: Mettre à jour les assignations        
 void handleUpdateAssignments() {        
   if (webServer.hasArg("plain")) {        
     DynamicJsonDocument doc(512);        
@@ -1932,7 +1701,7 @@ void handleUpdateAssignments() {
               
       DynamicJsonDocument response(128);        
       response["success"] = true;        
-      response["message"] = "Assignation mise ├á jour";        
+      response["message"] = "Assignation mise à jour";        
               
       String responseStr;        
       serializeJson(response, responseStr);        
@@ -2030,7 +1799,7 @@ void handleLoadWebPreset() {
       // Appliquer l'octave aux paramètres sensibles        
       applyWebOctave();        
               
-      // Mettre ├á jour l'affichage de l'octave        
+      // Mettre à jour l'affichage de l'octave        
       displayUnified();        
               
       lastWebPreset = id;        
@@ -2096,14 +1865,14 @@ void handleOctave() {
     if (selectedPreset == 0 && webModeActive) {        
       displayUnified();        
               
-      Serial.print("≡ƒÄ╡ Octave web mise ├á jour: ");        
+      Serial.print("🎵 Octave web mise à jour: ");        
       Serial.println(webOctave);        
     }        
             
     DynamicJsonDocument response(256);        
     response["success"] = true;        
     response["octave"] = webOctave;        
-    response["message"] = "Octave mise ├á jour";        
+    response["message"] = "Octave mise à jour";        
             
     String responseStr;        
     serializeJson(response, responseStr);        
@@ -2116,14 +1885,14 @@ void handleOctave() {
 // Gestion des erreurs 404        
 void handleNotFound() {        
   String path = webServer.uri();        
-  Serial.print("Γ¥î 404 - Page non trouvée: ");        
+  Serial.print(" 404 - Page non trouvée: ");        
   Serial.println(path);        
           
   // Vérifier si le fichier existe dans LittleFS        
   if (LittleFS.exists(path)) {        
-    Serial.println("  ΓÜá∩╕Å  Le fichier existe dans LittleFS mais n'a pas pu ├¬tre servi");        
+    Serial.println("  ⚠️ Le fichier existe dans LittleFS mais n'a pas pu être servi");        
   } else {        
-    Serial.println("  Γ¥î Le fichier n'existe pas dans LittleFS");        
+    Serial.println("   Le fichier n'existe pas dans LittleFS");        
   }        
           
   String response = "Page non trouvée: " + path;        
@@ -2179,27 +1948,27 @@ void saveWebPresets() {
         
 // Chargement des presets web depuis LittleFS        
 void loadWebPresets() {        
-  Serial.println("≡ƒöì DEBUG: Entrée dans loadWebPresets()");        
+  Serial.println("DEBUG: Entrée dans loadWebPresets()");        
           
   // Vérifier d'abord si le fichier existe        
-  Serial.println("≡ƒöì DEBUG: Vérification de l'existence du fichier...");        
+  Serial.println("DEBUG: Vérification de l'existence du fichier...");        
   bool fileExists = LittleFS.exists("/web_presets.json");        
-  Serial.print("≡ƒöì DEBUG: LittleFS.exists() retourne: ");        
+  Serial.print("DEBUG: LittleFS.exists() retourne: ");        
   Serial.println(fileExists ? "TRUE" : "FALSE");        
           
   if (!fileExists) {        
-    Serial.println("≡ƒôé Aucun preset web trouvé (première utilisation)");        
+    Serial.println("ℹ️ Aucun preset web trouvé (première utilisation)");        
     webPresetCount = 0;        
-    Serial.println("≡ƒöì DEBUG: Sortie de loadWebPresets() - fichier n'existe pas");        
+    Serial.println("DEBUG: Sortie de loadWebPresets() - fichier n'existe pas");        
     return;        
   }        
           
-  Serial.println("≡ƒöì DEBUG: Fichier existe, tentative d'ouverture...");        
+  Serial.println("DEBUG: Fichier existe, tentative d'ouverture...");        
   File file = LittleFS.open("/web_presets.json", "r");        
-  Serial.println("≡ƒöì DEBUG: Après appel LittleFS.open()");        
+  Serial.println("DEBUG: Après appel LittleFS.open()");        
           
   if (file) {        
-    Serial.println("≡ƒöì DEBUG: Fichier ouvert avec succès");        
+    Serial.println("DEBUG: Fichier ouvert avec succès");        
     DynamicJsonDocument doc(4096);        
     deserializeJson(doc, file);        
     file.close();        
@@ -2213,7 +1982,7 @@ void loadWebPresets() {
       if (slot >= 0 && slot < MAX_WEB_PRESETS) {        
         strcpy(webPresets[slot].name, preset["name"]);        
                 
-        // Charger l'octave (défaut ├á 0 si pas présent pour compatibilité)        
+        // Charger l'octave (défaut à 0 si pas présent pour compatibilité)        
         webPresets[slot].octave = preset["octave"] | 0;        
                 
         JsonArray valuesArray = preset["values"];        
@@ -2249,13 +2018,13 @@ void loadWebPresets() {
       }        
     }        
             
-    Serial.print("≡ƒôé ");        
+    Serial.print("✅ ");        
     Serial.print(webPresetCount);        
     Serial.println(" presets web chargés");        
   } else {        
-    Serial.println("≡ƒöì DEBUG: Impossible d'ouvrir le fichier");        
+    Serial.println("DEBUG: Impossible d'ouvrir le fichier");        
   }        
-  Serial.println("≡ƒöì DEBUG: Sortie de loadWebPresets()");        
+  Serial.println("DEBUG: Sortie de loadWebPresets()");        
 }        
         
 // Sauvegarde des assignations dans LittleFS        
@@ -2271,7 +2040,7 @@ void saveWebAssignments() {
             
     serializeJson(doc, file);        
     file.close();        
-    Serial.println("≡ƒÆ╛ Assignations web sauvegardées");        
+    Serial.println("✅ Assignations web sauvegardées");        
   }        
 }        
         
@@ -2279,8 +2048,8 @@ void saveWebAssignments() {
 void loadWebAssignments() {        
   // Vérifier d'abord si le fichier existe        
   if (!LittleFS.exists("/web_assignments.json")) {        
-    Serial.println("≡ƒöù Aucune assignation web trouvée (première utilisation)");        
-    // Initialiser avec des valeurs par défaut (tout ├á OFF)        
+    Serial.println("ℹ️ Aucune assignation web trouvée (première utilisation)");        
+    // Initialiser avec des valeurs par défaut (tout à OFF)        
     for (int i = 0; i < 4; i++) {        
       webAssignments[i] = 0;        
     }        
@@ -2302,7 +2071,7 @@ void loadWebAssignments() {
       }        
     }        
             
-    Serial.println("≡ƒôé Assignations web chargées");        
+    Serial.println("✅ Assignations web chargées");        
   }        
 }        
         
@@ -2320,7 +2089,7 @@ void saveWebStateToPreset0() {
     presets[0].values[27] = webAssignments[2]; // Fader2        
     presets[0].values[28] = webAssignments[3]; // Fader3        
             
-    Serial.println("≡ƒÆ╛ ├ëtat web sauvegardé dans le preset 0");        
+    Serial.println("✅ État web sauvegardé dans le preset 0");        
   }        
 }        
         
@@ -2341,7 +2110,7 @@ void loadWebStateFromPreset0() {
   // Sauvegarder les assignations web        
   saveWebAssignments();        
           
-  Serial.println("≡ƒôé ├ëtat web chargé depuis le preset 0");        
+  Serial.println("✅ État web chargé depuis le preset 0");        
 }        
         
 // Fonction pour réinitialiser les paramètres web quand on revient au preset 0        
@@ -2353,7 +2122,7 @@ void resetWebParameters() {
       parameters[i].value = webPresets[lastWebPreset].values[i];        
       dmxValues[parameters[i].dmxChannel - 1] = webPresets[lastWebPreset].values[i];        
     }        
-    Serial.println("≡ƒöä Paramètres web réinitialisés depuis le dernier preset: " + String(lastWebPreset));        
+    Serial.println("🔄 Paramètres web réinitialisés depuis le dernier preset: " + String(lastWebPreset));        
   } else {        
     // Sinon, utiliser les valeurs du preset 0        
     loadWebStateFromPreset0();        
@@ -2415,7 +2184,7 @@ void handleWebPhysicalControls() {
     dmxValues[parameters[paramIndex].dmxChannel - 1] = fader3Value;        
   }        
           
-  // Appliquer l'octave web après la mise ├á jour des contrôles physiques        
+  // Appliquer l'octave web après la mise à jour des contrôles physiques        
   applyWebOctave();        
 }        
         
