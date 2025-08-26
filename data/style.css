@@ -410,11 +410,39 @@ header h1 {
 }
 
 /* Section Octaves */
+.status-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
 .octave-controls {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 1rem;
+}
+
+.preset-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+}
+
+.preset-status label {
+  color: var(--text-color-secondary);
+  font-size: 14px;
+}
+
+.preset-value {
+  color: var(--primary-color);
+  font-weight: bold;
+  font-size: 16px;
+  padding: 4px 8px;
+  background: var(--surface-color);
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
 }
 
 .octave-value {
@@ -534,4 +562,43 @@ header h1 {
 
 .rgb-values span span {
   color: var(--primary-color);
+}
+
+/* Couleurs d'assignation pour les sliders */
+.slider.assigned-ir1, .fader.assigned-ir1 {
+  background: linear-gradient(to right, #ff69b4, #ff1493); /* Rose */
+}
+
+.slider.assigned-ir2, .fader.assigned-ir2 {
+  background: linear-gradient(to right, #ffffff, #e0e0e0); /* Blanc */
+}
+
+.slider.assigned-fader2, .fader.assigned-fader2 {
+  background: linear-gradient(to right, #ffff00, #ffd700); /* Jaune */
+}
+
+.slider.assigned-fader3, .fader.assigned-fader3 {
+  background: linear-gradient(to right, #00ff00, #32cd32); /* Vert */
+}
+
+/* Étiquettes des paramètres assignés */
+.param-control.assigned-ir1 .param-name, .filter-row.assigned-ir1 label {
+  color: #ff69b4;
+  font-weight: bold;
+}
+
+.param-control.assigned-ir2 .param-name, .filter-row.assigned-ir2 label {
+  color: #ffffff;
+  font-weight: bold;
+  text-shadow: 1px 1px 2px #000000; /* Ombre pour contraste sur fond sombre */
+}
+
+.param-control.assigned-fader2 .param-name, .filter-row.assigned-fader2 label {
+  color: #ffff00;
+  font-weight: bold;
+}
+
+.param-control.assigned-fader3 .param-name, .filter-row.assigned-fader3 label {
+  color: #00ff00;
+  font-weight: bold;
 }

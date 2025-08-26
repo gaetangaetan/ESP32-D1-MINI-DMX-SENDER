@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ksoloti Kontrol v019</title>
+    <title>Ksoloti Kontrol v023</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="main-container">
         <header>
             <div class="header-content">
-                <h1>Ksoloti Kontrol v019</h1>
+                <h1>Ksoloti Kontrol v023</h1>
                 <div class="view-toggle">
                     <button id="liveViewBtn" class="view-btn active">LIVE CONTROL</button>
                     <button id="configViewBtn" class="view-btn">CONFIG</button>
@@ -21,11 +21,17 @@
         <!-- Vue LIVE CONTROL -->
         <div id="liveView" class="view active">
             <section id="octaves" class="card">
-                <h2>Octaves</h2>
-                <div class="octave-controls">
-                    <button id="octave-down" class="btn btn-load">OCT-</button>
-                    <span id="octave-display" class="octave-value">0</span>
-                    <button id="octave-up" class="btn btn-load">OCT+</button>
+                <h2>État Actuel</h2>
+                <div class="status-controls">
+                    <div class="octave-controls">
+                        <button id="octave-down" class="btn btn-load">OCT-</button>
+                        <span id="octave-display" class="octave-value">0</span>
+                        <button id="octave-up" class="btn btn-load">OCT+</button>
+                    </div>
+                    <div class="preset-status">
+                        <label>Preset actuel:</label>
+                        <span id="current-preset-display" class="preset-value">P1</span>
+                    </div>
                 </div>
             </section>
             

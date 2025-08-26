@@ -152,6 +152,7 @@ int8_t webOctave = 0;                 // Octave web (indépendante de la transpo
 uint8_t selectedWebPreset = 1;        // Preset web sélectionné pour navigation (1-8)        
 bool isDisplayingLoad = false;        // True pendant l'affichage "LOAd"        
 unsigned long loadDisplayStartTime = 0; // Temps de début d'affichage "LOAd"        
+unsigned long lastPhysicalPresetChange = 0; // Timestamp du dernier changement physique        
         
 WebPreset webPresets[MAX_WEB_PRESETS];        
         
@@ -286,6 +287,7 @@ uint8_t transpose_factor = 24;  // Facteur de transposition
 // Prototypes        
 void displayUnified();        
 void applyWebOctave();        
+void handleGetStatus();        
         
 // Fonction pour stabiliser un capteur IR avec moyenne mobile et limitation d'aberrants        
 int stabilizeIRSensor(int newValue, int* buffer, int& index, int& sum, bool& initialized) {        
@@ -1574,9 +1576,6 @@ void setupWebRoutes() {
           
         
           
-  // Servir les fichiers statiques depuis LittleFS        
-  webServer.serveStatic("/", LittleFS, "/");        
-          
   // API pour récupérer les paramètres        
   webServer.on("/api/parameters", HTTP_GET, handleGetParameters);        
           
@@ -1601,11 +1600,30 @@ void setupWebRoutes() {
   // API pour gérer les octaves        
   webServer.on("/api/octave", HTTP_POST, handleOctave);        
           
+  // API pour vérifier les changements physiques - DÉSACTIVÉ (trop lourd)       
+  // webServer.on("/api/status", HTTP_GET, handleGetStatus);        
+          
+  // Servir les fichiers statiques depuis LittleFS (APRÈS les APIs)        
+  webServer.serveStatic("/", LittleFS, "/");        
+          
   // Gestion des erreurs 404        
   webServer.onNotFound(handleNotFound);        
 }        
         
-        
+// API: Récupérer le statut système        
+void handleGetStatus() {        
+  Serial.println("DEBUG: handleGetStatus() appelée");        
+  DynamicJsonDocument doc(512);        
+  doc["lastPhysicalPresetChange"] = lastPhysicalPresetChange;        
+  doc["selectedWebPreset"] = selectedWebPreset;        
+  doc["webOctave"] = webOctave;        
+  doc["lastWebPreset"] = lastWebPreset;        
+          
+  String response;        
+  serializeJson(doc, response);        
+  Serial.println("DEBUG: Status response: " + response);        
+  webServer.send(200, "application/json", response);        
+}        
         
 // API: Récupérer les paramètres        
 void handleGetParameters() {        
@@ -1680,6 +1698,7 @@ void handleGetAssignments() {
   webServer.send(200, "application/json", response);        
 }        
         
+
 // API: Mettre à jour les assignations        
 void handleUpdateAssignments() {        
   if (webServer.hasArg("plain")) {        
@@ -1811,6 +1830,15 @@ void handleLoadWebPreset() {
         paramsArray.add(webPresets[id].values[i]);        
       }        
               
+      // Ajouter l'octave du preset chargé        
+      response["octave"] = webPresets[id].octave;        
+              
+      // Ajouter les assignations du preset chargé        
+      JsonArray assignmentsArray = response.createNestedArray("assignments");        
+      for (int i = 0; i < 4; i++) {        
+        assignmentsArray.add(webPresets[id].assignments[i]);        
+      }        
+              
       String responseStr;        
       serializeJson(response, responseStr);        
       webServer.send(200, "application/json", responseStr);        
@@ -1838,6 +1866,7 @@ void handleListWebPresets() {
   webServer.send(200, "application/json", response);        
 }        
         
+
 // API: Gérer les octaves        
 void handleOctave() {        
   if (webServer.hasArg("plain")) {        
@@ -2196,6 +2225,7 @@ void loadWebPresetUnified(int presetIndex) {
   // Démarrer l'affichage "LOAd"        
   isDisplayingLoad = true;        
   loadDisplayStartTime = millis();        
+  lastPhysicalPresetChange = millis(); // Marquer le changement physique        
   displayUnified(); // Afficher "LOAd" immédiatement        
           
   // Appliquer les valeurs du preset        

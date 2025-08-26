@@ -57,8 +57,10 @@ function updateAssignment(assignId, value) {
   })
   .then(r => r.json())
   .then(d => {
-    // Notification supprimée pour éviter le spam
-    if (!d.success) {
+    if (d.success) {
+      // Recharger les assignations pour mettre à jour les couleurs
+      loadCurrentAssignments();
+    } else {
       showStatus('❌ Erreur assignation');
     }
   })
@@ -96,10 +98,6 @@ function savePreset(presetId) {
       // OSC Waveform - récupérer depuis l'affichage de valeur
       const valueDisplay = document.getElementById('value-6');
       value = valueDisplay ? parseInt(valueDisplay.textContent) : 0;
-    } else if (i === 20) {
-      // Filter On-Off - récupérer depuis l'affichage de valeur
-      const valueDisplay = document.getElementById('value-20');
-      value = valueDisplay && valueDisplay.textContent === 'ON' ? 1 : 0;
     } else {
       // Contrôle normal avec slider
       const slider = document.getElementById('param-' + i);
@@ -109,20 +107,28 @@ function savePreset(presetId) {
     values.push(value);
   }
   
-  // Paramètres filter (21-23) - récupérer depuis les sliders
-  const filterCutoffSlider = document.getElementById('param-21');
+  // Paramètres filter (21-23) - récupérer depuis les contrôles de filtre
+  const filterCutoffSlider = document.getElementById('filter-cutoff');
   values.push(filterCutoffSlider ? parseInt(filterCutoffSlider.value) : 0);
   
-  const filterResoSlider = document.getElementById('param-22');
+  const filterResoSlider = document.getElementById('filter-reso');
   values.push(filterResoSlider ? parseInt(filterResoSlider.value) : 0);
   
-  const filterTypeSlider = document.getElementById('param-23');
-  values.push(filterTypeSlider ? parseInt(filterTypeSlider.value) : 0);
+  // Déterminer le mode filtre depuis les boutons
+  let filterMode = 0; // 0 = OFF par défaut
+  if (document.getElementById('filter-hp').classList.contains('active')) filterMode = 1; // HP
+  else if (document.getElementById('filter-bp').classList.contains('active')) filterMode = 2; // BP  
+  else if (document.getElementById('filter-lp').classList.contains('active')) filterMode = 3; // LP
+  else if (document.getElementById('filter-off').classList.contains('active')) filterMode = 0; // OFF
+  values.push(filterMode);
   
   // Paramètres RGB (24-26)
   values.push(parseInt(document.getElementById('rgb-red-value').textContent));
   values.push(parseInt(document.getElementById('rgb-green-value').textContent));
   values.push(parseInt(document.getElementById('rgb-blue-value').textContent));
+  
+  console.log('DEBUG: Sauvegarde preset - values array length:', values.length);
+  console.log('DEBUG: Sauvegarde preset - values 20-26:', values.slice(20, 27));
 
   // Récupérer les assignations physiques actuelles
   const assignments = [];
@@ -187,6 +193,9 @@ function loadPreset(presetId) {
         console.log('DEBUG: Pas d\'octave dans la réponse');
       }
       
+      // Mettre à jour l'affichage du preset actuel
+      updateCurrentPresetDisplay(presetId);
+      
       // Mettre à jour les assignations si présentes dans la réponse
       if (d.assignments) {
         console.log('DEBUG: Mise à jour assignations:', d.assignments);
@@ -221,16 +230,9 @@ function loadCurrentParams() {
         if (valueDisplay) {
           valueDisplay.textContent = value;
         }
-      } else if (index === 20) {
-        // Filter On-Off - mettre à jour l'affichage et le bouton
-        if (valueDisplay) {
-          valueDisplay.textContent = value === 1 ? 'ON' : 'OFF';
-        }
-        const toggleBtn = document.getElementById('filter-toggle');
-        if (toggleBtn) {
-          toggleBtn.textContent = value === 1 ? 'ON' : 'OFF';
-          toggleBtn.classList.toggle('active', value === 1);
-        }
+      } else if (index >= 20 && index <= 23) {
+        // Paramètres filter - ignorer, gérés par les contrôles filter
+        return;
       } else {
         // Contrôle normal avec slider
         const slider = document.getElementById('param-' + index);
@@ -254,6 +256,9 @@ function loadCurrentAssignments() {
         select.value = value;
       }
     });
+    
+    // Appliquer les couleurs d'assignation
+    applyAssignmentColors(d.assignments);
   })
   .catch(e => console.error('Erreur chargement assignations:', e));
 }
@@ -278,6 +283,57 @@ function applyAssignmentsToInterface(assignments) {
     }
   });
   console.log('DEBUG: applyAssignmentsToInterface terminée');
+  
+  // Appliquer les couleurs d'assignation
+  applyAssignmentColors(assignments);
+}
+
+function applyAssignmentColors(assignments) {
+  console.log('DEBUG: applyAssignmentColors appelée avec:', assignments);
+  
+  // Supprimer toutes les classes d'assignation existantes
+  document.querySelectorAll('.param-control').forEach(control => {
+    control.classList.remove('assigned-ir1', 'assigned-ir2', 'assigned-fader2', 'assigned-fader3');
+  });
+  
+  document.querySelectorAll('.filter-row').forEach(control => {
+    control.classList.remove('assigned-ir1', 'assigned-ir2', 'assigned-fader2', 'assigned-fader3');
+  });
+  
+  document.querySelectorAll('.slider, .fader').forEach(slider => {
+    slider.classList.remove('assigned-ir1', 'assigned-ir2', 'assigned-fader2', 'assigned-fader3');
+  });
+  
+  if (!assignments || assignments.length !== 4) return;
+  
+  // Mapper les assignations aux classes CSS
+  const assignmentClasses = ['assigned-ir1', 'assigned-ir2', 'assigned-fader2', 'assigned-fader3'];
+  
+  assignments.forEach((paramIndex, controlIndex) => {
+    if (paramIndex > 0 && paramIndex <= 23) { // Paramètre assigné
+      const realParamIndex = paramIndex - 1; // Convertir 1-based en 0-based
+      let slider = document.getElementById('param-' + realParamIndex);
+      let control = slider ? slider.closest('.param-control') : null;
+      
+      // Si pas trouvé dans les paramètres normaux, chercher dans les filtres
+      if (!slider) {
+        if (realParamIndex === 21) { // Filter Cutoff
+          slider = document.getElementById('filter-cutoff');
+          control = slider ? slider.closest('.filter-row') : null;
+        } else if (realParamIndex === 22) { // Filter Reso  
+          slider = document.getElementById('filter-reso');
+          control = slider ? slider.closest('.filter-row') : null;
+        }
+      }
+      
+      if (slider && control) {
+        const colorClass = assignmentClasses[controlIndex];
+        slider.classList.add(colorClass);
+        control.classList.add(colorClass);
+        console.log('DEBUG: Couleur appliquée', colorClass, 'au paramètre', realParamIndex);
+      }
+    }
+  });
 }
 
 // Nouvelle fonction : appliquer un preset directement à l'interface
@@ -320,28 +376,28 @@ function applyPresetToInterface(presetValues) {
   if (filterCutoff) {
     filterCutoff.value = presetValues[21];
     document.getElementById('filter-cutoff-value').textContent = presetValues[21];
-    updateParameter(21, presetValues[21]);
   }
   if (filterReso) {
     filterReso.value = presetValues[22];
     document.getElementById('filter-reso-value').textContent = presetValues[22];
-    updateParameter(22, presetValues[22]);
   }
   
-  // Mode filtre unifié (analyse des paramètres 20 et 23)
-  const filterOnOff = presetValues[20];
-  const filterType = presetValues[23];
+  // Mode filtre (paramètre 23 contient directement le mode)
+  const filterModeValue = presetValues[23];
   
-  // Déterminer le mode selon les valeurs
+  console.log('DEBUG: Filter values - Cutoff:', presetValues[21], 'Reso:', presetValues[22], 'Mode:', filterModeValue);
+  console.log('DEBUG: Preset values array length:', presetValues.length);
+  console.log('DEBUG: Preset values 20-26:', presetValues.slice(20, 27));
+  
+  // Déterminer le mode selon la valeur (0=OFF, 1=HP, 2=BP, 3=LP)
   let filterMode;
-  if (filterOnOff === 0) {
-    filterMode = 'OFF';
-  } else {
-    if (filterType === 0) filterMode = 'HP';
-    else if (filterType === 100) filterMode = 'BP';
-    else if (filterType === 200) filterMode = 'LP';
-    else filterMode = 'HP'; // défaut
-  }
+  if (filterModeValue === 0) filterMode = 'OFF';
+  else if (filterModeValue === 1) filterMode = 'HP';
+  else if (filterModeValue === 2) filterMode = 'BP';
+  else if (filterModeValue === 3) filterMode = 'LP';
+  else filterMode = 'OFF'; // défaut
+  
+  console.log('DEBUG: Filter mode déterminé:', filterMode);
   
   // Mettre à jour les boutons (tous inactifs puis activer le bon)
   document.getElementById('filter-hp').classList.remove('active');
@@ -350,7 +406,7 @@ function applyPresetToInterface(presetValues) {
   document.getElementById('filter-off').classList.remove('active');
   document.getElementById('filter-' + filterMode.toLowerCase()).classList.add('active');
   
-  // Créer/mettre à jour les valeurs cachées
+  // Créer/mettre à jour les valeurs cachées pour compatibilité
   if (!document.getElementById('value-20')) {
     const hiddenValue20 = document.createElement('span');
     hiddenValue20.id = 'value-20';
@@ -363,8 +419,10 @@ function applyPresetToInterface(presetValues) {
     hiddenValue23.style.display = 'none';
     document.body.appendChild(hiddenValue23);
   }
-  document.getElementById('value-20').textContent = filterOnOff;
-  document.getElementById('value-23').textContent = filterType;
+  // Valeur 20: 255 si filtre actif, 0 si OFF
+  const filterOnOffValue = (filterModeValue > 0) ? 255 : 0;
+  document.getElementById('value-20').textContent = filterOnOffValue;
+  document.getElementById('value-23').textContent = filterModeValue;
   
   // Appliquer les paramètres RGB (24-26)
   const rgbRed = presetValues[24];
@@ -455,8 +513,8 @@ function generateParameters() {
   let html = '';
   
   for (let i = 0; i < 24; i++) {
-    // Ignorer les paramètres null (16, 17, 18)
-    if (paramNames[i] === null) {
+    // Ignorer les paramètres null (16, 17, 18) et les filtres (20, 21, 22, 23)
+    if (paramNames[i] === null || (i >= 20 && i <= 23)) {
       continue;
     }
     
@@ -472,14 +530,6 @@ function generateParameters() {
       html += '<span class="waveform-display" id="waveform-display">0</span>';
       html += '<button class="btn-waveform" onclick="changeWaveform(1)">+</button>';
       html += '</div>';
-      html += '</div>';
-    } else if (i === 20) { // Filter On-Off
-      html += '<div class="param-control">';
-      html += '<div class="param-label-wrapper">';
-      html += '<span class="param-name">Filter On-Off</span>';
-      html += '<span class="param-value" id="value-20">OFF</span>';
-      html += '</div>';
-      html += '<button class="btn-toggle" id="filter-toggle" onclick="toggleFilter()">OFF</button>';
       html += '</div>';
     } else {
       // Contrôle normal
@@ -543,13 +593,7 @@ function setupFilterControls() {
     });
   }
   
-  if (filterType) {
-    filterType.addEventListener('input', function() {
-      const value = parseInt(this.value);
-      document.getElementById('filter-type-value').textContent = value;
-      debouncedUpdateParameter(23, value); // Index 23 = filter_type
-    });
-  }
+  // Pas de slider pour filter-type, géré par les boutons setFilterMode()
 }
 
 function setupRGBControls() {
@@ -600,6 +644,12 @@ document.addEventListener('DOMContentLoaded', function() {
   // loadCurrentParams();
   // loadCurrentAssignments();
   
+  // Initialiser l'affichage du preset actuel
+  updateCurrentPresetDisplay(1);
+  
+  // Polling désactivé (trop lourd)
+  // startStatusPolling();
+  
   // Event listeners pour les boutons de vue
   document.getElementById('liveViewBtn').addEventListener('click', () => switchView('live'));
   document.getElementById('configViewBtn').addEventListener('click', () => switchView('config'));
@@ -639,32 +689,27 @@ function setFilterMode(mode) {
   // Ajouter la classe active au bouton sélectionné
   document.getElementById('filter-' + mode.toLowerCase()).classList.add('active');
   
-  // Définir les valeurs selon le mode
-  let filterOnOff, filterType;
+  // Définir la valeur du mode filtre selon le nouveau système
+  let filterModeValue;
   
   switch(mode) {
     case 'HP':
-      filterOnOff = 255; // Filtre activé
-      filterType = 0;    // High Pass
+      filterModeValue = 1; // High Pass
       break;
     case 'BP':
-      filterOnOff = 255; // Filtre activé
-      filterType = 100;  // Band Pass
+      filterModeValue = 2; // Band Pass
       break;
     case 'LP':
-      filterOnOff = 255; // Filtre activé
-      filterType = 200;  // Low Pass
+      filterModeValue = 3; // Low Pass
       break;
     case 'OFF':
-      filterOnOff = 0;   // Filtre désactivé
-      filterType = 0;    // Type indifférent (on garde HP par défaut)
+      filterModeValue = 0; // Filtre désactivé
       break;
     default:
-      filterOnOff = 0;
-      filterType = 0;
+      filterModeValue = 0;
   }
   
-  // Créer/mettre à jour les valeurs cachées
+  // Créer/mettre à jour les valeurs cachées pour compatibilité
   if (!document.getElementById('value-20')) {
     const hiddenValue20 = document.createElement('span');
     hiddenValue20.id = 'value-20';
@@ -678,12 +723,26 @@ function setFilterMode(mode) {
     document.body.appendChild(hiddenValue23);
   }
   
-  document.getElementById('value-20').textContent = filterOnOff;
-  document.getElementById('value-23').textContent = filterType;
+  // Valeur 20: 255 si filtre actif, 0 si OFF
+  const filterOnOffValue = (filterModeValue > 0) ? 255 : 0;
+  document.getElementById('value-20').textContent = filterOnOffValue;
+  document.getElementById('value-23').textContent = filterModeValue;
   
   // Envoyer les valeurs au serveur
-  updateParameter(20, filterOnOff); // Filter On/Off
-  updateParameter(23, filterType);  // Filter Type
+  updateParameter(20, filterOnOffValue); // Filter On/Off (compatibilité)
+  updateParameter(23, filterModeValue);  // Filter Mode (nouveau système)
   
-  console.log('DEBUG: Filter mode set to', mode, '- OnOff:', filterOnOff, 'Type:', filterType);
+  console.log('DEBUG: Filter mode set to', mode, '- Mode value:', filterModeValue);
 }
+
+function updateCurrentPresetDisplay(presetId) {
+  const currentPresetDisplay = document.getElementById('current-preset-display');
+  if (currentPresetDisplay) {
+    currentPresetDisplay.textContent = 'P' + presetId;
+    console.log('DEBUG: Preset actuel mis à jour: P' + presetId);
+  }
+}
+
+// Variables pour le polling - DÉSACTIVÉ (trop lourd)
+// let lastKnownPhysicalChange = 0;
+// let statusPollingInterval = null;
