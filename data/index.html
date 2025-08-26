@@ -3,34 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ksoloti Kontrol v023</title>
+    <title>Ksoloti Kontrol v028</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="main-container">
         <header>
             <div class="header-content">
-                <h1>Ksoloti Kontrol v023</h1>
-                <div class="view-toggle">
-                    <button id="liveViewBtn" class="view-btn active">LIVE CONTROL</button>
-                    <button id="configViewBtn" class="view-btn">CONFIG</button>
-                </div>
+                <h1>Ksoloti Kontrol v028</h1>
             </div>
         </header>
 
-        <!-- Vue LIVE CONTROL -->
-        <div id="liveView" class="view active">
-            <section id="octaves" class="card">
-                <h2>État Actuel</h2>
-                <div class="status-controls">
+        <!-- Interface unifiée -->
+        <div class="main-content">
+            <section id="control-status" class="card">
+                <h2>État Actuel & Couleur</h2>
+                <div class="control-status-grid">
                     <div class="octave-controls">
+                        <label>Octave:</label>
                         <button id="octave-down" class="btn btn-load">OCT-</button>
                         <span id="octave-display" class="octave-value">0</span>
                         <button id="octave-up" class="btn btn-load">OCT+</button>
                     </div>
                     <div class="preset-status">
-                        <label>Preset actuel:</label>
                         <span id="current-preset-display" class="preset-value">P1</span>
+                    </div>
+                    <div class="color-picker-container">
+                        <label for="color-picker">Couleur:</label>
+                        <input type="color" id="color-picker" value="#ff0000">
+                        <div class="rgb-values" style="display: none;">
+                            <span>R: <span id="rgb-red-value">255</span></span>
+                            <span>G: <span id="rgb-green-value">0</span></span>
+                            <span>B: <span id="rgb-blue-value">0</span></span>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -80,36 +85,17 @@
                 </div>
             </section>
             
-            <!-- Section RGB -->
-            <section id="rgb" class="card">
-                <h2>Couleur RGB</h2>
-                <div class="rgb-controls">
-                    <div class="color-picker-container">
-                        <label for="color-picker">Couleur:</label>
-                        <input type="color" id="color-picker" value="#ff0000">
-                        <div class="rgb-values">
-                            <span>R: <span id="rgb-red-value">255</span></span>
-                            <span>G: <span id="rgb-green-value">0</span></span>
-                            <span>B: <span id="rgb-blue-value">0</span></span>
-                        </div>
-                    </div>
+            <!-- Section Assignations intégrée -->
+            <section id="assignments" class="card">
+                <h2>Assignations Physiques</h2>
+                <div class="assignments-grid" id="assignmentsGrid">
+                    <!-- Généré dynamiquement par JavaScript -->
                 </div>
             </section>
 
             <section id="parameters" class="card">
                 <h2>Paramètres Live</h2>
                 <div class="params-grid" id="paramsGrid">
-                    <!-- Généré dynamiquement par JavaScript -->
-                </div>
-            </section>
-        </div>
-
-        <!-- Vue CONFIG -->
-        <div id="configView" class="view">
-            <!-- Section Assignations -->
-            <section id="assignments" class="card">
-                <h2>Assignations Physiques</h2>
-                <div class="assignments-grid" id="assignmentsGrid">
                     <!-- Généré dynamiquement par JavaScript -->
                 </div>
             </section>

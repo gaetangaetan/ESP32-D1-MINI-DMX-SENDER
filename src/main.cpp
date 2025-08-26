@@ -2233,7 +2233,20 @@ void loadWebPresetUnified(int presetIndex) {
   for (int i = 0; i < 27; i++) {        
     parameters[i].value = webPresets[presetIndex].values[i];        
     dmxValues[parameters[i].dmxChannel - 1] = webPresets[presetIndex].values[i];        
-  }        
+  }
+  
+  // IMPORTANT: Conversion du mode filtre pour Filter On-Off (comme dans l'interface web)
+  uint8_t filterModeValue = webPresets[presetIndex].values[23]; // Filter Mode
+  uint8_t filterOnOffValue = (filterModeValue > 0) ? 255 : 0;   // 255 si filtre actif, 0 si OFF
+  
+  // Appliquer la valeur convertie
+  parameters[20].value = filterOnOffValue;  // Filter On-Off = paramètre 20
+  dmxValues[parameters[20].dmxChannel - 1] = filterOnOffValue;
+  
+  Serial.print("DEBUG: Conversion filtre - Mode: ");
+  Serial.print(filterModeValue);
+  Serial.print(" -> Filter On-Off: ");
+  Serial.println(filterOnOffValue);        
           
   // Charger l'octave du preset        
   webOctave = webPresets[presetIndex].octave;        

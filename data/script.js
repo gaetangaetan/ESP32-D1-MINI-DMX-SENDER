@@ -5,15 +5,14 @@ const paramNames = [
   'Autopan Depth', 'Pitch', 'Vibrato Speed', 'Vibrato Depth', 'Delay Time',
   'Delay Feedback', 'OSC Waveform', 'Gate Threshold', 'Portamento Time', 'Scale',
   'Octave Low High', 'OSC 2 Volume', 'OSC 2 Pitch Offset', 'Autopan Frequency', 'Scale Tonic',
-  'Volume Drums', null, null, null, 'Master Volume (Inverted)', // null = paramètres cachés
+  'Volume ONIRIGUN', null, null, null, 'Master Volume (Inverted)', // null = paramètres cachés
   'Filter On-Off', 'Filter Cutoff', 'Filter Reso', 'Filter Type', 'RGB Red', 'RGB Green', 'RGB Blue'
 ];
 
 // Noms des assignations
 const assignmentNames = ['Capteur IR 1', 'Capteur IR 2', 'Fader 2', 'Fader 3'];
 
-// Gestion des vues
-let currentView = 'live';
+// Interface unifiée - plus de vues séparées
 
 // Système de debouncing pour éviter le spam de requêtes
 let debounceTimers = {};
@@ -376,10 +375,12 @@ function applyPresetToInterface(presetValues) {
   if (filterCutoff) {
     filterCutoff.value = presetValues[21];
     document.getElementById('filter-cutoff-value').textContent = presetValues[21];
+    updateParameter(21, presetValues[21]); // Envoyer Cutoff au serveur
   }
   if (filterReso) {
     filterReso.value = presetValues[22];
     document.getElementById('filter-reso-value').textContent = presetValues[22];
+    updateParameter(22, presetValues[22]); // Envoyer Résonance au serveur
   }
   
   // Mode filtre (paramètre 23 contient directement le mode)
@@ -424,6 +425,12 @@ function applyPresetToInterface(presetValues) {
   document.getElementById('value-20').textContent = filterOnOffValue;
   document.getElementById('value-23').textContent = filterModeValue;
   
+  // IMPORTANT: Envoyer le paramètre Filter On-Off au serveur
+  updateParameter(20, filterOnOffValue); // Filter On/Off 
+  updateParameter(23, filterModeValue);  // Filter Mode
+  
+  console.log('DEBUG: Filter On-Off envoyé au serveur:', filterOnOffValue);
+  
   // Appliquer les paramètres RGB (24-26)
   const rgbRed = presetValues[24];
   const rgbGreen = presetValues[25];
@@ -447,23 +454,7 @@ function showStatus(message) {
   }, 3000);
 }
 
-// Gestion des vues
-function switchView(view) {
-  currentView = view;
-  
-  // Masquer toutes les vues
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
-  
-  // Afficher la vue sélectionnée
-  if (view === 'live') {
-    document.getElementById('liveView').classList.add('active');
-    document.getElementById('liveViewBtn').classList.add('active');
-  } else {
-    document.getElementById('configView').classList.add('active');
-    document.getElementById('configViewBtn').classList.add('active');
-  }
-}
+// Interface unifiée - plus besoin de fonction switchView
 
 // Génération du contenu HTML
 function generatePresets() {
@@ -649,13 +640,6 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Polling désactivé (trop lourd)
   // startStatusPolling();
-  
-  // Event listeners pour les boutons de vue
-  document.getElementById('liveViewBtn').addEventListener('click', () => switchView('live'));
-  document.getElementById('configViewBtn').addEventListener('click', () => switchView('config'));
-  
-  // Démarrer sur la vue LIVE CONTROL
-  switchView('live');
 });
 
 // Fonction pour changer la waveform (0-6)
