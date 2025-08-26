@@ -2118,7 +2118,8 @@ void saveWebStateToPreset0() {
         
 // Chargement de l'état web depuis le preset 0        
 void loadWebStateFromPreset0() {        
-  // Charger les 21 paramètres audio principaux depuis le preset 0        
+  // Charger les 21 paramètres audio principaux depuis le preset 0   
+       
   for (int i = 0; i < 21; i++) {        
     parameters[i].value = presets[0].values[i];        
     dmxValues[parameters[i].dmxChannel - 1] = presets[0].values[i];        
