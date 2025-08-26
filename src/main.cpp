@@ -102,7 +102,8 @@ typedef struct {
 typedef struct {        
   char name[32];        
   uint8_t values[27];  // 27 paramètres (0-20: audio principaux, 21-23: filter, 24-26: rgb1)        
-  int8_t octave;       // Octave web (-12 ├á +12)        
+  int8_t octave;       // Octave web (-12 à +12)        
+  uint8_t assignments[4]; // Assignations physiques: IR1, IR2, Fader2, Fader3        
 } WebPreset;        
         
 // ============================================================================        
@@ -1952,7 +1953,8 @@ void handleSaveWebPreset() {
             
     const char* name = doc["name"];        
     JsonArray values = doc["values"];        
-    int slot = doc["slot"]; // Nouveau : index du slot o├╣ sauvegarder        
+    JsonArray assignments = doc["assignments"];        
+    int slot = doc["slot"]; // Nouveau : index du slot où sauvegarder        
             
     if (slot >= 0 && slot < MAX_WEB_PRESETS && values.size() == 27) {        
       strcpy(webPresets[slot].name, name);        
@@ -1964,7 +1966,19 @@ void handleSaveWebPreset() {
       // Sauvegarder l'octave web actuelle        
       webPresets[slot].octave = webOctave;        
               
-      // Mettre ├á jour webPresetCount si nécessaire        
+      // Sauvegarder les assignations physiques reçues        
+      if (assignments.size() == 4) {        
+        for (int i = 0; i < 4; i++) {        
+          webPresets[slot].assignments[i] = assignments[i];        
+        }        
+      } else {        
+        // Fallback : utiliser les assignations actuelles si pas reçues        
+        for (int i = 0; i < 4; i++) {        
+          webPresets[slot].assignments[i] = webAssignments[i];        
+        }        
+      }        
+              
+      // Mettre à jour webPresetCount si nécessaire        
       if (slot >= webPresetCount) {        
         webPresetCount = slot + 1;        
       }        
@@ -2004,6 +2018,14 @@ void handleLoadWebPreset() {
               
       // Charger l'octave du preset        
       webOctave = webPresets[id].octave;        
+              
+      // Charger les assignations physiques du preset        
+      for (int i = 0; i < 4; i++) {        
+        webAssignments[i] = webPresets[id].assignments[i];        
+      }        
+              
+      // Sauvegarder les assignations web mises à jour        
+      saveWebAssignments();        
               
       // Appliquer l'octave aux paramètres sensibles        
       applyWebOctave();        
@@ -2140,6 +2162,12 @@ void saveWebPresets() {
         for (int j = 0; j < 27; j++) {        
           valuesArray.add(webPresets[i].values[j]);        
         }        
+                
+        // Sauvegarder les assignations physiques        
+        JsonArray assignmentsArray = preset.createNestedArray("assignments");        
+        for (int j = 0; j < 4; j++) {        
+          assignmentsArray.add(webPresets[i].assignments[j]);        
+        }        
       }        
     }        
             
@@ -2197,7 +2225,24 @@ void loadWebPresets() {
           }        
         }        
                 
-        // Mettre ├á jour webPresetCount si nécessaire        
+        // Charger les assignations physiques (défaut à 0 si pas présent pour compatibilité)        
+        if (preset.containsKey("assignments")) {        
+          JsonArray assignmentsArray = preset["assignments"];        
+          int j = 0;        
+          for (JsonVariant assignment : assignmentsArray) {        
+            if (j < 4) {        
+              webPresets[slot].assignments[j] = assignment | 0;        
+              j++;        
+            }        
+          }        
+        } else {        
+          // Compatibilité avec les anciens presets : initialiser les assignations à 0        
+          for (int j = 0; j < 4; j++) {        
+            webPresets[slot].assignments[j] = 0;        
+          }        
+        }        
+                
+        // Mettre à jour webPresetCount si nécessaire        
         if (slot >= webPresetCount) {        
           webPresetCount = slot + 1;        
         }        

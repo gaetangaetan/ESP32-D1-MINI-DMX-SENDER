@@ -125,12 +125,20 @@ function savePreset(presetId) {
   values.push(parseInt(document.getElementById('rgb-green-value').textContent));
   values.push(parseInt(document.getElementById('rgb-blue-value').textContent));
 
+  // Récupérer les assignations physiques actuelles
+  const assignments = [];
+  for (let i = 0; i < 4; i++) {
+    const select = document.getElementById('assignment-' + i);
+    assignments.push(select ? parseInt(select.value) : 0);
+  }
+
   fetch('/api/save-preset', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       name: 'Preset ' + presetId,
       values: values,
+      assignments: assignments,
       slot: parseInt(presetId) - 1 // Convertir l'ID du bouton (1-8) en index de slot (0-7)
     })
   })
