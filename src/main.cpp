@@ -1689,7 +1689,7 @@ void handleUpdateAssignments() {
     int index = doc["index"];        
     int value = doc["value"];        
             
-    if (index >= 0 && index < 4 && value >= 0 && value <= 21) {        
+    if (index >= 0 && index < 4 && value >= 0 && value <= 23) {        
       webAssignments[index] = value;        
       saveWebAssignments();        
               
@@ -2151,28 +2151,28 @@ void handleWebPhysicalControls() {
   uint8_t fader3Value = (4095 - analogRead(FADER_3_PIN)) / 16;        
           
   // IR1        
-  if (webAssignments[0] > 0 && webAssignments[0] <= 21) {        
+  if (webAssignments[0] > 0 && webAssignments[0] <= 23) {        
     int paramIndex = webAssignments[0] - 1;        
     parameters[paramIndex].value = ir1Value;        
     dmxValues[parameters[paramIndex].dmxChannel - 1] = ir1Value;        
   }        
           
   // IR2        
-  if (webAssignments[1] > 0 && webAssignments[1] <= 21) {        
+  if (webAssignments[1] > 0 && webAssignments[1] <= 23) {        
     int paramIndex = webAssignments[1] - 1;        
     parameters[paramIndex].value = ir2Value;        
     dmxValues[parameters[paramIndex].dmxChannel - 1] = ir2Value;        
   }        
           
   // Fader2        
-  if (webAssignments[2] > 0 && webAssignments[2] <= 21) {        
+  if (webAssignments[2] > 0 && webAssignments[2] <= 23) {        
     int paramIndex = webAssignments[2] - 1;        
     parameters[paramIndex].value = fader2Value;        
     dmxValues[parameters[paramIndex].dmxChannel - 1] = fader2Value;        
   }        
           
   // Fader3        
-  if (webAssignments[3] > 0 && webAssignments[3] <= 21) {        
+  if (webAssignments[3] > 0 && webAssignments[3] <= 23) {        
     int paramIndex = webAssignments[3] - 1;        
     parameters[paramIndex].value = fader3Value;        
     dmxValues[parameters[paramIndex].dmxChannel - 1] = fader3Value;        

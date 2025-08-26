@@ -88,7 +88,7 @@ function savePreset(presetId) {
   // Récupérer les valeurs actuelles des 27 paramètres (y compris filter et RGB)
   const values = [];
   
-  // Paramètres principaux (0-20)
+  // Paramètres principaux (0-20)  
   for (let i = 0; i < 21; i++) {
     let value = 0;
     
@@ -109,16 +109,15 @@ function savePreset(presetId) {
     values.push(value);
   }
   
-  // Paramètres filter (21-23)
-  values.push(parseInt(document.getElementById('filter-cutoff').value));
-  values.push(parseInt(document.getElementById('filter-reso').value));
+  // Paramètres filter (21-23) - récupérer depuis les sliders
+  const filterCutoffSlider = document.getElementById('param-21');
+  values.push(filterCutoffSlider ? parseInt(filterCutoffSlider.value) : 0);
   
-  // Filter type - récupérer depuis les boutons actifs
-  let filterType = 0; // OFF par défaut
-  if (document.getElementById('filter-hp').classList.contains('active')) filterType = 1;
-  else if (document.getElementById('filter-bp').classList.contains('active')) filterType = 2;
-  else if (document.getElementById('filter-lp').classList.contains('active')) filterType = 3;
-  values.push(filterType);
+  const filterResoSlider = document.getElementById('param-22');
+  values.push(filterResoSlider ? parseInt(filterResoSlider.value) : 0);
+  
+  const filterTypeSlider = document.getElementById('param-23');
+  values.push(filterTypeSlider ? parseInt(filterTypeSlider.value) : 0);
   
   // Paramètres RGB (24-26)
   values.push(parseInt(document.getElementById('rgb-red-value').textContent));
@@ -440,7 +439,7 @@ function generateAssignments() {
     html += '<select class="custom-select" id="assignment-' + i + '" onchange="updateAssignment(' + i + ', this.value)">';
     html += '<option value="0">OFF</option>';
     
-    for (let j = 0; j < 21; j++) {
+    for (let j = 0; j < 24; j++) {
       html += '<option value="' + (j + 1) + '">' + paramNames[j] + '</option>';
     }
     
@@ -455,7 +454,7 @@ function generateParameters() {
   const container = document.getElementById('paramsGrid');
   let html = '';
   
-  for (let i = 0; i < 21; i++) {
+  for (let i = 0; i < 24; i++) {
     // Ignorer les paramètres null (16, 17, 18)
     if (paramNames[i] === null) {
       continue;
