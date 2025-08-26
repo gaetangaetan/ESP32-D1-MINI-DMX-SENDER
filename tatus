@@ -1,0 +1,25 @@
+[33mcbd10ea[m[33m ([m[1;36mHEAD -> [m[1;32mversion-5-interface-web[m[33m)[m version fonctionnelle avant uniformisation des presets
+[33m2d48d75[m version pas mal fonctionnelle
+[33mb393d44[m Ajout d'une interface web pour le contrôleur DMX, incluant la gestion des presets et des assignations via un serveur web. Intégration de la bibliothèque ArduinoJson pour le traitement des données JSON. Mise à jour des dépendances dans platformio.ini.
+[33m632d596[m[33m ([m[1;31morigin/version-4-gestion-onirigun-dans-ksoloti-receiver[m[33m, [m[1;32mversion-4-gestion-onirigun-dans-ksoloti-receiver[m[33m)[m ok
+[33ma09250a[m on fait passer le contrôle de l'onirigun dans le récepteur ksoloti
+[33m64c7f26[m[33m ([m[1;31morigin/version-3-ajout-de-onirigun[m[33m, [m[1;32mversion-3-ajout-de-onirigun[m[33m)[m début ajout onirigun
+[33ma8cc124[m[33m ([m[1;31morigin/Emetteur_pour_ksoloti[m[33m, [m[1;32mEmetteur_pour_ksoloti[m[33m)[m ok
+[33m6ae958d[m version 162 : unicast vers récepteur ESP8266
+[33m6baa30e[m backup avant unicast
+[33meec7bbb[m version fonctionnelle 16082025
+[33m1b06283[m amélioration contrôleur 16082025
+[33mc530b42[m version fonctionnelle 1.0
+[33mbb95437[m sauvegarde avant progra lights
+[33m9ce7a70[m sauvegarde avant interruptions
+[33mded70b6[m sauvegarde avant changement librairie tm1637
+[33m544e02e[m Version montée avant programmation
+[33m642076e[m version 25 paramètres et tous les boutons et capteurs sont prêts
+[33ma705403[m ajout de contrôles
+[33m3d73fbf[m tests encodeur rotatif
+[33meb41497[m communication bidirectionnelle ok
+[33mf0014ab[m sauvegarde avant réception ESP-NOW
+[33mc7203bc[m début programmation
+[33m0419827[m[33m ([m[1;31morigin/public-basic-ok-19012025[m[33m, [m[1;32mpublic-basic-ok-19012025[m[33m)[m version publique ok
+[33m69b614e[m[33m ([m[1;31morigin/basic-dmx-input-wireless-emitter-02112024[m[33m, [m[1;32mbasic-dmx-input-wireless-emitter-02112024[m[33m)[m basic version
+[33m0a53e6b[m[33m ([m[1;31morigin/workshop-textile-connecte1[m[33m, [m[1;31morigin/main[m[33m, [m[1;32mworkshop-textile-connecte1[m[33m, [m[1;32mmain[m[33m)[m first commit

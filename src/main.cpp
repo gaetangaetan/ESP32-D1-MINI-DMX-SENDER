@@ -100,9 +100,10 @@ typedef struct {
 
 // Structure pour un preset web
 typedef struct {
-  char name[32];
+  char name[16];       // Réduction de 32 à 16 pour économiser la mémoire
   uint8_t values[27];  // 27 paramètres (0-20: audio principaux, 21-23: filter, 24-26: rgb1)
   int8_t octave;       // Octave web (-12 à +12)
+  uint8_t assignments[4]; // Assignations physiques: IR1, IR2, Fader2, Fader3
 } WebPreset;
 
 // ============================================================================
@@ -140,11 +141,15 @@ ESP32Encoder encoder;
 WebServer webServer(WEB_SERVER_PORT);
 
 // Variables pour l'interface web
-bool webModeActive = false;           // True si le preset 0 (web) est actif
+bool webModeActive = true;            // True si le preset 0 (web) est actif (activé par défaut)
 uint8_t webAssignments[4] = {0, 0, 0, 0}; // IR1, IR2, Fader2, Fader3 (0 = OFF, 1-21 = paramètre)
 uint8_t lastWebPreset = 0;            // Dernier preset web chargé
 uint8_t webPresetCount = 0;           // Nombre de presets web sauvegardés
 int8_t webOctave = 0;                 // Octave web (indépendante de la transposition)
+
+// Variables pour l'encodeur et webpresets
+uint8_t selectedWebPreset = 1;        // Preset web sélectionné via encodeur (1-8)
+bool webPresetMode = true;            // Mode webpreset activé (remplace l'ancien système)
 
 WebPreset webPresets[MAX_WEB_PRESETS];
 
@@ -279,6 +284,7 @@ uint8_t transpose_factor = 24;  // Facteur de transposition
 // Prototypes
 void displayUnified();
 void applyWebOctave();
+void loadWebPresetFromEncoder(uint8_t presetNumber);
 
 // Fonction pour stabiliser un capteur IR avec moyenne mobile et limitation d'aberrants
 int stabilizeIRSensor(int newValue, int* buffer, int& index, int& sum, bool& initialized) {
@@ -417,6 +423,54 @@ void applyWebOctave() {
     dmxValues[parameters[7].dmxChannel - 1] = (uint8_t)gateValue;
     
     // Debug supprimé pour améliorer les performances
+  }
+}
+
+
+// Fonction pour charger un webpreset via l'encodeur (réutilise la logique web)
+void loadWebPresetFromEncoder(uint8_t presetNumber) {
+  Serial.print("📁 Chargement WebPreset P");
+  Serial.print(presetNumber);
+  Serial.println(" via encodeur");
+  
+  // Convertir le numéro de preset (1-8) en index (0-7)
+  uint8_t presetIndex = presetNumber - 1;
+  
+  // Vérifier que le preset existe
+  if (presetIndex < MAX_WEB_PRESETS && presetIndex < webPresetCount && strlen(webPresets[presetIndex].name) > 0) {
+    // Appliquer les valeurs du preset (même logique que handleLoadWebPreset)
+    for (int i = 0; i < 27; i++) {
+      parameters[i].value = webPresets[presetIndex].values[i];
+      dmxValues[parameters[i].dmxChannel - 1] = webPresets[presetIndex].values[i];
+    }
+    
+    // Charger l'octave du preset
+    webOctave = webPresets[presetIndex].octave;
+    
+    // Charger les assignations physiques du preset
+    for (int i = 0; i < 4; i++) {
+      webAssignments[i] = webPresets[presetIndex].assignments[i];
+    }
+    
+    // Appliquer l'octave aux paramètres sensibles
+    applyWebOctave();
+    
+    // Sauvegarder les assignations web mises à jour
+    saveWebAssignments();
+    
+    lastWebPreset = presetIndex;
+    
+    // Sauvegarder l'état dans le preset 0 pour persistance
+    saveWebStateToPreset0();
+    
+    Serial.print("✅ WebPreset P");
+    Serial.print(presetNumber);
+    Serial.print(" chargé: ");
+    Serial.println(webPresets[presetIndex].name);
+  } else {
+    Serial.print("❌ WebPreset P");
+    Serial.print(presetNumber);
+    Serial.println(" non trouvé ou vide");
   }
 }
 
@@ -1306,65 +1360,77 @@ void handleButtonInterrupts() {
 void handleEncoder() {
   int32_t currentEncoderValue = - encoder.getCount();
   
-  // Calculer le preset selon la formule : |valeur_encoder / 2| % 10
-  // Utiliser la valeur absolue pour éviter les problèmes avec les grandes valeurs négatives
-  int32_t normalizedValue = abs(currentEncoderValue / 2);
-  uint8_t newPreset = normalizedValue % MAX_PRESETS;
-  
-  // Si le preset a changé
-  if (newPreset != selectedPreset) {
-    // Sauvegarder l'état web si on quitte le preset 0
-    if (selectedPreset == 0 && webModeActive) {
-      saveWebStateToPreset0();
+  // En mode webpreset, calculer le preset web sélectionné (1-8)
+  if (webPresetMode) {
+    // Calculer le preset web selon la formule : |valeur_encoder / 2| % 8 + 1
+    int32_t normalizedValue = abs(currentEncoderValue / 2);
+    uint8_t newWebPreset = (normalizedValue % 8) + 1; // 1-8
+    
+    // Si le preset web sélectionné a changé
+    if (newWebPreset != selectedWebPreset) {
+      selectedWebPreset = newWebPreset;
+      
+      // Afficher le preset web sélectionné sur TM1637
+      displayUnified();
+      
+      // Debug sur le moniteur série
+      Serial.print("🎛️ WebPreset sélectionné: P");
+      Serial.println(selectedWebPreset);
     }
+  } else {
+    // Ancien code de gestion des presets (désactivé par défaut)
+    int32_t normalizedValue = abs(currentEncoderValue / 2);
+    uint8_t newPreset = normalizedValue % MAX_PRESETS;
     
-    selectedPreset = newPreset;
-    
-    // Réinitialiser la transposition lors du changement de preset
-    transpose = 0;
-    
-    // Charger le preset sélectionné
-    loadPreset(selectedPreset);
-    
-    // Si on revient au preset 0, réinitialiser les paramètres web
-    if (selectedPreset == 0) {
-      resetWebParameters();
+    if (newPreset != selectedPreset) {
+      selectedPreset = newPreset;
+      loadPreset(selectedPreset);
+      displayUnified();
+      
+      Serial.print("Preset changé: ");
+      Serial.print(selectedPreset);
+      Serial.print(" - ");
+      Serial.println(presets[selectedPreset].name);
     }
-    
-    // Pas besoin d'updateGateThresholdWithTranspose() car transpose = 0
-    
-    // Afficher le nouveau preset avec transposition réinitialisée
-    displayUnified();
-    
-    // Debug sur le moniteur série
-    Serial.print("Preset changé: ");
-    Serial.print(selectedPreset);
-    Serial.print(" - ");
-    Serial.println(presets[selectedPreset].name);
-    Serial.println("Transposition réinitialisée à 0");
   }
   
-  // Gestion du bouton de l'encodeur (toggle filtre)
+  // Gestion du bouton de l'encodeur
   bool encoderButtonState = !digitalRead(ENCODER_BUTTON_PIN);
   if (encoderButtonState && !encoderButtonPressed && (millis() - lastEncoderButtonPress > BUTTON_DEBOUNCE)) {
-    uint8_t currentFilterState = getParameter("filter_on_off");
-    uint8_t newFilterState = (currentFilterState == 0) ? 255 : 0;
-    setParameter("filter_on_off", newFilterState);
     
-    // Afficher temporairement l'état du filtre
-    display.clear();
-    if (newFilterState == 255) {
-      display.showNumberDec(9999); // Afficher "9999" pour indiquer FILTRE ON
+    if (webPresetMode) {
+      // Charger le webpreset sélectionné
+      loadWebPresetFromEncoder(selectedWebPreset);
+      
+      // Afficher temporairement "LOAD" puis revenir à la sélection
+      display.clear();
+      // Afficher "LOAD" sous forme de segments
+      uint8_t loadSegments[] = {0x38, 0x3F, 0x77, 0x3D}; // L-O-A-D
+      display.setSegments(loadSegments);
+      delay(1000);
+      displayUnified();
+      
     } else {
-      display.showNumberDec(0);    // Afficher "0000" pour indiquer FILTRE OFF
+      // Ancien comportement (toggle filtre)
+      uint8_t currentFilterState = getParameter("filter_on_off");
+      uint8_t newFilterState = (currentFilterState == 0) ? 255 : 0;
+      setParameter("filter_on_off", newFilterState);
+      
+      // Afficher temporairement l'état du filtre
+      display.clear();
+      if (newFilterState == 255) {
+        display.showNumberDec(9999); // Afficher "9999" pour indiquer FILTRE ON
+      } else {
+        display.showNumberDec(0);    // Afficher "0000" pour indiquer FILTRE OFF
+      }
+      
+      Serial.print("Filtre: ");
+      Serial.println((newFilterState == 255) ? "ON" : "OFF");
+      
+      // Attendre 500ms puis revenir à l'affichage unifié
+      delay(500);
+      displayUnified();
     }
-    
-    Serial.print("Filtre: ");
-    Serial.println((newFilterState == 255) ? "ON" : "OFF");
-    
-    // Attendre 500ms puis revenir à l'affichage unifié
-    delay(500);
-    displayUnified();
     
     encoderButtonPressed = true;
     lastEncoderButtonPress = millis();
@@ -1377,45 +1443,71 @@ void handleEncoder() {
 
 // Fonction pour afficher la transposition et le preset de manière unifiée
 void displayUnified() {
-  // Format: TTPP où TT = transposition/octave (-12 à +12) et PP = preset (0-9)
-  // Exemples: 
-  // - Transposition +5, preset 3 → "0503" 
-  // - Transposition -2, preset 7 → "-207"
-  // - Octave web +3, preset 0 → "0300"
-  
   uint8_t segments[4] = {0, 0, 0, 0};
   
-  // Choisir entre transposition physique et octave web
-  int8_t displayValue = (selectedPreset == 0 && webModeActive) ? webOctave : transpose;
-  
-  // Calcul pour les digits de la transposition/octave (positions 0 et 1)
-  if (displayValue == 0) {
-    // Valeur = 0 : afficher "00"
-    segments[0] = display.encodeDigit(0);
-    segments[1] = display.encodeDigit(0);
-  } else if (displayValue > 0) {
-    // Valeur positive : afficher directement le nombre
-    if (displayValue >= 10) {
-      segments[0] = display.encodeDigit(displayValue / 10);
-      segments[1] = display.encodeDigit(displayValue % 10);
-    } else {
+  if (webPresetMode) {
+    // En mode webpreset : afficher octave + "P" + numéro preset
+    // Format: OOPP où OO = octave (-12 à +12) et PP = "P" + numéro (P1-P8)
+    
+    // Calcul pour les digits de l'octave (positions 0 et 1)
+    if (webOctave == 0) {
+      // Octave = 0 : afficher "00"
       segments[0] = display.encodeDigit(0);
-      segments[1] = display.encodeDigit(displayValue);
-    }
-  } else {
-    // Valeur négative : afficher "-" + valeur absolue
-    segments[0] = 0x40; // Segment "-"
-    int absValue = -displayValue;
-    if (absValue >= 10) {
-      segments[1] = display.encodeDigit(absValue / 10);
+      segments[1] = display.encodeDigit(0);
+    } else if (webOctave > 0) {
+      // Octave positive : afficher directement le nombre
+      if (webOctave >= 10) {
+        segments[0] = display.encodeDigit(webOctave / 10);
+        segments[1] = display.encodeDigit(webOctave % 10);
+      } else {
+        segments[0] = display.encodeDigit(0);
+        segments[1] = display.encodeDigit(webOctave);
+      }
     } else {
-      segments[1] = display.encodeDigit(absValue);
+      // Octave négative : afficher "-" + valeur absolue
+      segments[0] = 0x40; // Segment "-"
+      int absValue = -webOctave;
+      if (absValue >= 10) {
+        segments[1] = display.encodeDigit(absValue / 10);
+      } else {
+        segments[1] = display.encodeDigit(absValue);
+      }
     }
+    
+    // Positions 2 et 3 : "P" + numéro du webpreset
+    segments[2] = 0x73; // Segment pour "P"
+    segments[3] = display.encodeDigit(selectedWebPreset);
+    
+  } else {
+    // Ancien mode : transposition + preset
+    // Format: TTPP où TT = transposition (-12 à +12) et PP = preset (0-9)
+    
+    // Calcul pour les digits de la transposition (positions 0 et 1)
+    if (transpose == 0) {
+      segments[0] = display.encodeDigit(0);
+      segments[1] = display.encodeDigit(0);
+    } else if (transpose > 0) {
+      if (transpose >= 10) {
+        segments[0] = display.encodeDigit(transpose / 10);
+        segments[1] = display.encodeDigit(transpose % 10);
+      } else {
+        segments[0] = display.encodeDigit(0);
+        segments[1] = display.encodeDigit(transpose);
+      }
+    } else {
+      segments[0] = 0x40; // Segment "-"
+      int absValue = -transpose;
+      if (absValue >= 10) {
+        segments[1] = display.encodeDigit(absValue / 10);
+      } else {
+        segments[1] = display.encodeDigit(absValue);
+      }
+    }
+    
+    // Calcul pour les digits du preset (positions 2 et 3)
+    segments[2] = display.encodeDigit(0);
+    segments[3] = display.encodeDigit(selectedPreset);
   }
-  
-  // Calcul pour les digits du preset (positions 2 et 3)
-  segments[2] = display.encodeDigit(0); // Toujours 0 car preset va de 0 à 9
-  segments[3] = display.encodeDigit(selectedPreset);
   
   // Afficher les segments
   display.setSegments(segments);
@@ -1455,14 +1547,27 @@ void setup()
   // Initialisation des presets
   initializePresets();
   
-  // Chargement du preset 1 au démarrage
-  loadPreset(1);
-  selectedPreset = 1; // S'assurer que selectedPreset est correct
+  // En mode webpreset, on ne charge plus les anciens presets
+  if (webPresetMode) {
+    // Démarrer en mode web avec P1 sélectionné
+    selectedPreset = 0; // Preset 0 = mode web
+    webModeActive = true;
+    selectedWebPreset = 1;
+    
+    // Charger le premier webpreset s'il existe
+    if (webPresetCount > 0 && strlen(webPresets[0].name) > 0) {
+      loadWebPresetFromEncoder(1);
+    }
+  } else {
+    // Ancien comportement (chargement preset 1)
+    loadPreset(1);
+    selectedPreset = 1;
+  }
   
   // Initialisation de l'interface utilisateur
   initializeUserInterface();
   
-  // Affichage initial unifié
+  // Affichage initial
   displayUnified();
   
   // Configuration ESP-NOW
@@ -1771,6 +1876,10 @@ void setupWebInterface() {
   for (int i = 0; i < MAX_WEB_PRESETS; i++) {
     webPresets[i].name[0] = '\0'; // Marquer les slots comme vides
     webPresets[i].octave = 0;     // Initialiser l'octave à 0
+    // Initialiser les assignations physiques à 0 (OFF)
+    for (int j = 0; j < 4; j++) {
+      webPresets[i].assignments[j] = 0;
+    }
   }
   
   // Charger les presets web et assignations
@@ -1861,6 +1970,18 @@ void handleGetParameters() {
     for (int i = 0; i < 27; i++) {
       paramsArray.add(presets[selectedPreset].values[i]);
     }
+  }
+  
+  // Ajouter l'octave et les assignations à la réponse
+  doc["octave"] = webOctave;
+  doc["webModeActive"] = webModeActive;
+  doc["lastWebPreset"] = lastWebPreset;
+  doc["webPresetCount"] = webPresetCount;
+  
+  // Inclure les assignations physiques actuelles
+  JsonArray assignmentsArray = doc.createNestedArray("assignments");
+  for (int i = 0; i < 4; i++) {
+    assignmentsArray.add(webAssignments[i]);
   }
   
   String response;
@@ -1964,6 +2085,11 @@ void handleSaveWebPreset() {
       // Sauvegarder l'octave web actuelle
       webPresets[slot].octave = webOctave;
       
+      // Sauvegarder les assignations physiques actuelles
+      for (int i = 0; i < 4; i++) {
+        webPresets[slot].assignments[i] = webAssignments[i];
+      }
+      
       // Mettre à jour webPresetCount si nécessaire
       if (slot >= webPresetCount) {
         webPresetCount = slot + 1;
@@ -2005,11 +2131,30 @@ void handleLoadWebPreset() {
       // Charger l'octave du preset
       webOctave = webPresets[id].octave;
       
+      // Charger les assignations physiques du preset
+      for (int i = 0; i < 4; i++) {
+        webAssignments[i] = webPresets[id].assignments[i];
+      }
+      
       // Appliquer l'octave aux paramètres sensibles
       applyWebOctave();
       
+      // Sauvegarder les assignations web mises à jour
+      saveWebAssignments();
+      
       // Mettre à jour l'affichage de l'octave
       displayUnified();
+      
+      // Forcer la mise à jour de l'affichage de l'octave
+      if (webOctave >= 0) {
+        display.showNumberDec(webOctave, false, 2, 0);
+      } else {
+        // Pour les valeurs négatives, afficher le signe moins
+        uint8_t segments[] = {0x40, 0, 0, 0}; // Segment "-" à la position 0
+        display.setSegments(segments);
+        delay(100); // Petit délai pour voir le signe moins
+        display.showNumberDec(-webOctave, false, 1, 1); // Valeur absolue à partir de la position 1
+      }
       
       lastWebPreset = id;
       
@@ -2024,6 +2169,13 @@ void handleLoadWebPreset() {
       JsonArray paramsArray = response.createNestedArray("parameters");
       for (int i = 0; i < 27; i++) {
         paramsArray.add(webPresets[id].values[i]);
+      }
+      
+      // Retourner aussi l'octave et les assignations du preset
+      response["octave"] = webPresets[id].octave;
+      JsonArray assignmentsArray = response.createNestedArray("assignments");
+      for (int i = 0; i < 4; i++) {
+        assignmentsArray.add(webPresets[id].assignments[i]);
       }
       
       String responseStr;
@@ -2046,6 +2198,13 @@ void handleListWebPresets() {
     JsonObject preset = presetsArray.createNestedObject();
     preset["name"] = webPresets[i].name;
     preset["id"] = i;
+    preset["octave"] = webPresets[i].octave;
+    
+    // Inclure les assignations physiques
+    JsonArray assignmentsArray = preset.createNestedArray("assignments");
+    for (int j = 0; j < 4; j++) {
+      assignmentsArray.add(webPresets[i].assignments[j]);
+    }
   }
   
   String response;
@@ -2073,6 +2232,17 @@ void handleOctave() {
     // Afficher l'octave sur l'écran (utiliser webOctave au lieu de transpose)
     if (selectedPreset == 0 && webModeActive) {
       displayUnified();
+      
+      // Forcer la mise à jour de l'affichage
+      if (webOctave >= 0) {
+        display.showNumberDec(webOctave, false, 2, 0);
+      } else {
+        // Pour les valeurs négatives, afficher le signe moins
+        uint8_t segments[] = {0x40, 0, 0, 0}; // Segment "-" à la position 0
+        display.setSegments(segments);
+        delay(100); // Petit délai pour voir le signe moins
+        display.showNumberDec(-webOctave, false, 1, 1); // Valeur absolue à partir de la position 1
+      }
       
       Serial.print("🎵 Octave web mise à jour: ");
       Serial.println(webOctave);
@@ -2125,7 +2295,7 @@ void handleNotFound() {
 void saveWebPresets() {
   File file = LittleFS.open("/web_presets.json", "w");
   if (file) {
-    DynamicJsonDocument doc(4096);
+    DynamicJsonDocument doc(2048); // Réduction de 4096 à 2048
     JsonArray presetsArray = doc.createNestedArray("presets");
     
     for (int i = 0; i < MAX_WEB_PRESETS; i++) {
@@ -2135,6 +2305,12 @@ void saveWebPresets() {
         preset["slot"] = i;  // Sauvegarder le numéro de slot
         preset["name"] = webPresets[i].name;
         preset["octave"] = webPresets[i].octave; // Sauvegarder l'octave
+        
+        // Sauvegarder les assignations physiques
+        JsonArray assignmentsArray = preset.createNestedArray("assignments");
+        for (int j = 0; j < 4; j++) {
+          assignmentsArray.add(webPresets[i].assignments[j]);
+        }
         
         JsonArray valuesArray = preset.createNestedArray("values");
         for (int j = 0; j < 27; j++) {
@@ -2172,7 +2348,7 @@ void loadWebPresets() {
   
   if (file) {
     Serial.println("🔍 DEBUG: Fichier ouvert avec succès");
-    DynamicJsonDocument doc(4096);
+    DynamicJsonDocument doc(2048); // Réduction de 4096 à 2048
     deserializeJson(doc, file);
     file.close();
     
@@ -2187,6 +2363,23 @@ void loadWebPresets() {
         
         // Charger l'octave (défaut à 0 si pas présent pour compatibilité)
         webPresets[slot].octave = preset["octave"] | 0;
+        
+        // Charger les assignations physiques (défaut à 0 si pas présent pour compatibilité)
+        if (preset.containsKey("assignments")) {
+          JsonArray assignmentsArray = preset["assignments"];
+          int j = 0;
+          for (JsonVariant assignment : assignmentsArray) {
+            if (j < 4) {
+              webPresets[slot].assignments[j] = assignment | 0;
+              j++;
+            }
+          }
+        } else {
+          // Compatibilité avec les anciens presets : initialiser les assignations à 0
+          for (int j = 0; j < 4; j++) {
+            webPresets[slot].assignments[j] = 0;
+          }
+        }
         
         JsonArray valuesArray = preset["values"];
         int i = 0;

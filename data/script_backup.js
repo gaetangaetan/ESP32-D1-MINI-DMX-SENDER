@@ -1,11 +1,9 @@
-console.log('DEBUG: Script.js chargé - début d\'exécution');
-
 // Noms des paramètres
 const paramNames = [
   'Autopan Depth', 'Pitch', 'Vibrato Speed', 'Vibrato Depth', 'Delay Time',
   'Delay Feedback', 'OSC Waveform', 'Gate Threshold', 'Portamento Time', 'Scale',
   'Octave Low High', 'OSC 2 Volume', 'OSC 2 Pitch Offset', 'Autopan Frequency', 'Scale Tonic',
-  'Volume Drums', null, null, null, 'Master Volume (Inverted)', // null = paramètres cachés
+  'Volume Drums', 'Reserved 16', 'Reserved 17', 'Reserved 18', 'Master Volume (Inverted)',
   'Filter On-Off', 'Filter Cutoff', 'Filter Reso', 'Filter Type', 'RGB Red', 'RGB Green', 'RGB Blue'
 ];
 
@@ -125,60 +123,36 @@ function savePreset(presetId) {
 }
 
 function loadPreset(presetId) {
-  console.log('DEBUG: loadPreset() appelée avec ID:', presetId);
-  
   fetch('/api/load-preset', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({id: parseInt(presetId) - 1}) // Convertir l'ID du bouton (1-8) en index de tableau (0-7)
   })
-  .then(r => {
-    console.log('DEBUG: Réponse fetch reçue, status:', r.status);
-    return r.json();
-  })
+  .then(r => r.json())
   .then(d => {
-    console.log('DEBUG: Données JSON reçues:', d);
-    
     if (d.success) {
-      console.log('DEBUG: Début applyPresetToInterface');
       // Appliquer directement les valeurs du preset sans appeler l'API
       applyPresetToInterface(d.parameters);
-      console.log('DEBUG: applyPresetToInterface terminé');
       
       // Mettre à jour l'affichage de l'octave si présente dans la réponse
       if (typeof d.octave !== 'undefined') {
-        console.log('DEBUG: Mise à jour octave:', d.octave);
         const octaveDisplay = document.getElementById('octave-display');
         if (octaveDisplay) {
           octaveDisplay.textContent = d.octave;
-          console.log('DEBUG: Octave mise à jour dans le DOM');
-        } else {
-          console.log('DEBUG: Element octave-display non trouvé');
         }
-      } else {
-        console.log('DEBUG: Pas d\'octave dans la réponse');
       }
       
       // Mettre à jour les assignations si présentes dans la réponse
       if (d.assignments) {
-        console.log('DEBUG: Mise à jour assignations:', d.assignments);
         applyAssignmentsToInterface(d.assignments);
-        console.log('DEBUG: Assignations mises à jour');
-      } else {
-        console.log('DEBUG: Pas d\'assignations dans la réponse');
       }
       
-      console.log('DEBUG: Affichage du status de succès');
       showStatus('✅ Preset ' + presetId + ' chargé');
     } else {
-      console.log('DEBUG: Échec du chargement:', d.message);
       showStatus('❌ Erreur chargement');
     }
   })
-  .catch(e => {
-    console.error('DEBUG: Erreur fetch:', e);
-    showStatus('❌ Erreur de connexion');
-  });
+  .catch(e => showStatus('❌ Erreur de connexion'));
 }
 
 function loadCurrentParams() {
@@ -212,25 +186,18 @@ function loadCurrentAssignments() {
 }
 
 function applyAssignmentsToInterface(assignments) {
-  console.log('DEBUG: applyAssignmentsToInterface appelée avec:', assignments);
-  
   if (!assignments || assignments.length !== 4) {
-    console.error('DEBUG: Assignations invalides, attendu 4 assignations, reçu:', assignments?.length);
+    console.error('Assignations invalides, attendu 4 assignations, reçu:', assignments?.length);
     return;
   }
   
   // Appliquer les assignations aux sélecteurs
   assignments.forEach((value, index) => {
-    console.log('DEBUG: Application assignation', index, '=', value);
     const select = document.getElementById('assignment-' + index);
     if (select) {
       select.value = value;
-      console.log('DEBUG: Assignation', index, 'appliquée');
-    } else {
-      console.log('DEBUG: Sélecteur assignment-' + index + ' non trouvé');
     }
   });
-  console.log('DEBUG: applyAssignmentsToInterface terminée');
 }
 
 // Nouvelle fonction : appliquer un preset directement à l'interface
@@ -242,33 +209,19 @@ function applyPresetToInterface(presetValues) {
   
   // Appliquer les paramètres principaux (0-20)
   for (let i = 0; i < 21; i++) {
-    // Ignorer les paramètres null
-    if (paramNames[i] === null) {
-      continue;
-    }
+    const slider = document.getElementById('param-' + i);
+    const valueDisplay = document.getElementById('value-' + i);
     
-    // Contrôles spéciaux
-    if (i === 6) { // OSC Waveform
-      const waveform = Math.round(presetValues[i] / 40);
-      document.getElementById('value-6').textContent = presetValues[i];
-      document.getElementById('waveform-display').textContent = waveform;
-    } else if (i === 20) { // Filter - traité avec le paramètre 23
-      // Ne rien faire ici, c'est géré dans la section spéciale ci-dessous
-    } else {
-      // Contrôle normal
-      const slider = document.getElementById('param-' + i);
-      const valueDisplay = document.getElementById('value-' + i);
-      
-      if (slider && valueDisplay) {
-        slider.value = presetValues[i];
-        valueDisplay.textContent = presetValues[i];
-      }
+    if (slider && valueDisplay) {
+      slider.value = presetValues[i];
+      valueDisplay.textContent = presetValues[i];
     }
   }
   
   // Appliquer les paramètres filter (21-23)
   const filterCutoff = document.getElementById('filter-cutoff');
   const filterReso = document.getElementById('filter-reso');
+  const filterType = document.getElementById('filter-type');
   
   if (filterCutoff) {
     filterCutoff.value = presetValues[21];
@@ -280,44 +233,11 @@ function applyPresetToInterface(presetValues) {
     document.getElementById('filter-reso-value').textContent = presetValues[22];
     updateParameter(22, presetValues[22]);
   }
-  
-  // Mode filtre unifié (analyse des paramètres 20 et 23)
-  const filterOnOff = presetValues[20];
-  const filterType = presetValues[23];
-  
-  // Déterminer le mode selon les valeurs
-  let filterMode;
-  if (filterOnOff === 0) {
-    filterMode = 'OFF';
-  } else {
-    if (filterType === 0) filterMode = 'HP';
-    else if (filterType === 100) filterMode = 'BP';
-    else if (filterType === 200) filterMode = 'LP';
-    else filterMode = 'HP'; // défaut
+  if (filterType) {
+    filterType.value = presetValues[23];
+    document.getElementById('filter-type-value').textContent = presetValues[23];
+    updateParameter(23, presetValues[23]);
   }
-  
-  // Mettre à jour les boutons (tous inactifs puis activer le bon)
-  document.getElementById('filter-hp').classList.remove('active');
-  document.getElementById('filter-bp').classList.remove('active');
-  document.getElementById('filter-lp').classList.remove('active');
-  document.getElementById('filter-off').classList.remove('active');
-  document.getElementById('filter-' + filterMode.toLowerCase()).classList.add('active');
-  
-  // Créer/mettre à jour les valeurs cachées
-  if (!document.getElementById('value-20')) {
-    const hiddenValue20 = document.createElement('span');
-    hiddenValue20.id = 'value-20';
-    hiddenValue20.style.display = 'none';
-    document.body.appendChild(hiddenValue20);
-  }
-  if (!document.getElementById('value-23')) {
-    const hiddenValue23 = document.createElement('span');
-    hiddenValue23.id = 'value-23';
-    hiddenValue23.style.display = 'none';
-    document.body.appendChild(hiddenValue23);
-  }
-  document.getElementById('value-20').textContent = filterOnOff;
-  document.getElementById('value-23').textContent = filterType;
   
   // Appliquer les paramètres RGB (24-26)
   const rgbRed = presetValues[24];
@@ -408,43 +328,14 @@ function generateParameters() {
   let html = '';
   
   for (let i = 0; i < 21; i++) {
-    // Ignorer les paramètres null (16, 17, 18)
-    if (paramNames[i] === null) {
-      continue;
-    }
-    
-    // Contrôles spéciaux
-    if (i === 6) { // OSC Waveform
-      html += '<div class="param-control">';
-      html += '<div class="param-label-wrapper">';
-      html += '<span class="param-name">OSC Waveform</span>';
-      html += '<span class="param-value" id="value-6">0</span>';
-      html += '</div>';
-      html += '<div class="waveform-controls">';
-      html += '<button class="btn-waveform" onclick="changeWaveform(-1)">-</button>';
-      html += '<span class="waveform-display" id="waveform-display">0</span>';
-      html += '<button class="btn-waveform" onclick="changeWaveform(1)">+</button>';
-      html += '</div>';
-      html += '</div>';
-    } else if (i === 20) { // Filter On-Off
-      html += '<div class="param-control">';
-      html += '<div class="param-label-wrapper">';
-      html += '<span class="param-name">Filter On-Off</span>';
-      html += '<span class="param-value" id="value-20">OFF</span>';
-      html += '</div>';
-      html += '<button class="btn-toggle" id="filter-toggle" onclick="toggleFilter()">OFF</button>';
-      html += '</div>';
-    } else {
-      // Contrôle normal
-      html += '<div class="param-control">';
-      html += '<div class="param-label-wrapper">';
-      html += '<span class="param-name">' + paramNames[i] + '</span>';
-      html += '<span class="param-value" id="value-' + i + '">0</span>';
-      html += '</div>';
-      html += '<input type="range" class="slider" id="param-' + i + '" min="0" max="255" value="0" ';
-      html += 'oninput="debouncedUpdateParameter(' + i + ', this.value); document.getElementById(\'value-' + i + '\').textContent = this.value">';
-      html += '</div>';
-    }
+    html += '<div class="param-control">';
+    html += '<div class="param-label-wrapper">';
+    html += '<span class="param-name">' + paramNames[i] + '</span>';
+    html += '<span class="param-value" id="value-' + i + '">0</span>';
+    html += '</div>';
+    html += '<input type="range" class="slider" id="param-' + i + '" min="0" max="255" value="0" ';
+    html += 'oninput="debouncedUpdateParameter(' + i + ', this.value); document.getElementById(\'value-' + i + '\').textContent = this.value">';
+    html += '</div>';
   }
   
   container.innerHTML = html;
@@ -524,8 +415,7 @@ function setupRGBControls() {
 
 // Initialisation
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('DEBUG: DOMContentLoaded - Interface DMX ESP32 initialisée');
-  console.log('DEBUG: Début initialisation des écouteurs d\'événements');
+  console.log('Interface DMX ESP32 initialisée');
   
   // Écouteurs pour les boutons d'octave
   const octaveDownBtn = document.getElementById('octave-down');
@@ -560,83 +450,3 @@ document.addEventListener('DOMContentLoaded', function() {
   // Démarrer sur la vue LIVE CONTROL
   switchView('live');
 });
-
-// Fonction pour changer la waveform (0-6)
-function changeWaveform(direction) {
-  const currentValue = parseInt(document.getElementById('value-6').textContent);
-  const currentWaveform = Math.round(currentValue / 40);
-  let newWaveform = currentWaveform + direction;
-  
-  // Limiter entre 0 et 6
-  if (newWaveform < 0) newWaveform = 0;
-  if (newWaveform > 6) newWaveform = 6;
-  
-  const newValue = newWaveform * 40;
-  
-  // Mettre à jour l'affichage
-  document.getElementById('value-6').textContent = newValue;
-  document.getElementById('waveform-display').textContent = newWaveform;
-  
-  // Envoyer la valeur au serveur
-  updateParameter(6, newValue);
-}
-
-// Fonction unifiée pour définir le mode de filtre (HP/BP/LP/OFF)
-function setFilterMode(mode) {
-  // Retirer la classe active de tous les boutons
-  document.getElementById('filter-hp').classList.remove('active');
-  document.getElementById('filter-bp').classList.remove('active');
-  document.getElementById('filter-lp').classList.remove('active');
-  document.getElementById('filter-off').classList.remove('active');
-  
-  // Ajouter la classe active au bouton sélectionné
-  document.getElementById('filter-' + mode.toLowerCase()).classList.add('active');
-  
-  // Définir les valeurs selon le mode
-  let filterOnOff, filterType;
-  
-  switch(mode) {
-    case 'HP':
-      filterOnOff = 255; // Filtre activé
-      filterType = 0;    // High Pass
-      break;
-    case 'BP':
-      filterOnOff = 255; // Filtre activé
-      filterType = 100;  // Band Pass
-      break;
-    case 'LP':
-      filterOnOff = 255; // Filtre activé
-      filterType = 200;  // Low Pass
-      break;
-    case 'OFF':
-      filterOnOff = 0;   // Filtre désactivé
-      filterType = 0;    // Type indifférent (on garde HP par défaut)
-      break;
-    default:
-      filterOnOff = 0;
-      filterType = 0;
-  }
-  
-  // Créer/mettre à jour les valeurs cachées
-  if (!document.getElementById('value-20')) {
-    const hiddenValue20 = document.createElement('span');
-    hiddenValue20.id = 'value-20';
-    hiddenValue20.style.display = 'none';
-    document.body.appendChild(hiddenValue20);
-  }
-  if (!document.getElementById('value-23')) {
-    const hiddenValue23 = document.createElement('span');
-    hiddenValue23.id = 'value-23';
-    hiddenValue23.style.display = 'none';
-    document.body.appendChild(hiddenValue23);
-  }
-  
-  document.getElementById('value-20').textContent = filterOnOff;
-  document.getElementById('value-23').textContent = filterType;
-  
-  // Envoyer les valeurs au serveur
-  updateParameter(20, filterOnOff); // Filter On/Off
-  updateParameter(23, filterType);  // Filter Type
-  
-  console.log('DEBUG: Filter mode set to', mode, '- OnOff:', filterOnOff, 'Type:', filterType);
-}

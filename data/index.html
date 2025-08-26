@@ -63,9 +63,13 @@
                         <span class="value-display" id="filter-reso-value">0</span>
                     </div>
                     <div class="filter-row">
-                        <label for="filter-type">Type</label>
-                        <input type="range" id="filter-type" class="fader" min="0" max="255" value="0">
-                        <span class="value-display" id="filter-type-value">0</span>
+                        <label>Mode Filtre</label>
+                        <div class="filter-mode-controls">
+                            <button class="btn-filter-mode" id="filter-hp" onclick="setFilterMode('HP')">HP</button>
+                            <button class="btn-filter-mode" id="filter-bp" onclick="setFilterMode('BP')">BP</button>
+                            <button class="btn-filter-mode" id="filter-lp" onclick="setFilterMode('LP')">LP</button>
+                            <button class="btn-filter-mode active" id="filter-off" onclick="setFilterMode('OFF')">OFF</button>
+                        </div>
                     </div>
                 </div>
             </section>

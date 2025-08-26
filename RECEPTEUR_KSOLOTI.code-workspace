@@ -15,5 +15,7 @@
 			"path": "../ONIRIGUN juillet 2025"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"powershell.cwd": "ESP32 D1 MINI DMX SENDER"
+	}
 }
