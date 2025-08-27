@@ -122,6 +122,9 @@ void handleSaveWebPreset();
 void handleLoadWebPreset();        
 void handleListWebPresets();        
 void handleOctave();        
+void handleExportPresets();
+void handleImportPresets();
+void initializeEmptyWebPresets();
 void handleNotFound();        
 void saveWebPresets();        
 void loadWebPresets();        
@@ -1541,7 +1544,14 @@ void setupWebInterface() {
           
   // Charger les presets web et assignations        
   Serial.println("Début du chargement des presets web...");        
-  loadWebPresets();        
+  loadWebPresets();
+  
+  // Initialiser les presets vides si aucun preset n'existe
+  if (webPresetCount == 0) {
+    Serial.println("Aucun preset trouvé - Initialisation des presets vides...");
+    initializeEmptyWebPresets();
+  }
+  
   Serial.println("Début du chargement des assignations web...");        
   loadWebAssignments();        
 }        
@@ -1599,6 +1609,10 @@ void setupWebRoutes() {
           
   // API pour gérer les octaves        
   webServer.on("/api/octave", HTTP_POST, handleOctave);        
+  
+  // API pour exporter/importer les presets
+  webServer.on("/api/export-presets", HTTP_GET, handleExportPresets);
+  webServer.on("/api/import-presets", HTTP_POST, handleImportPresets);
           
   // API pour vérifier les changements physiques - DÉSACTIVÉ (trop lourd)       
   // webServer.on("/api/status", HTTP_GET, handleGetStatus);        
@@ -2158,15 +2172,20 @@ void handleWebPhysicalControls() {
   updateRGBWithDimmer();        
   // Vérifier s'il y a des assignations actives        
   bool hasActiveAssignments = false;        
+  bool pitchAssigned = false;        
+  bool gateThresholdAssigned = false;        
+  
   for (int i = 0; i < 4; i++) {        
-    if (webAssignments[i] > 0 && webAssignments[i] <= 21) {        
+    if (webAssignments[i] > 0 && webAssignments[i] <= 24) {        
       hasActiveAssignments = true;        
-      break;        
+      if (webAssignments[i] == 2) pitchAssigned = true;        // pitch est le paramètre 2 (indice 1)        
+      if (webAssignments[i] == 8) gateThresholdAssigned = true; // gate_threshold est le paramètre 8 (indice 7)        
     }        
   }        
           
-  // Si aucune assignation active, ne rien faire        
+  // Si aucune assignation active, appliquer l'octave seulement (pour les changements d'octave manuels)        
   if (!hasActiveAssignments) {        
+    applyWebOctave();        
     return;        
   }        
           
@@ -2181,36 +2200,60 @@ void handleWebPhysicalControls() {
   uint8_t fader3Value = (4095 - analogRead(FADER_3_PIN)) / 16;        
           
   // IR1        
-  if (webAssignments[0] > 0 && webAssignments[0] <= 23) {        
+  if (webAssignments[0] > 0 && webAssignments[0] <= 24) {        
     int paramIndex = webAssignments[0] - 1;        
     parameters[paramIndex].value = ir1Value;        
     dmxValues[parameters[paramIndex].dmxChannel - 1] = ir1Value;        
   }        
           
   // IR2        
-  if (webAssignments[1] > 0 && webAssignments[1] <= 23) {        
+  if (webAssignments[1] > 0 && webAssignments[1] <= 24) {        
     int paramIndex = webAssignments[1] - 1;        
     parameters[paramIndex].value = ir2Value;        
     dmxValues[parameters[paramIndex].dmxChannel - 1] = ir2Value;        
   }        
           
   // Fader2        
-  if (webAssignments[2] > 0 && webAssignments[2] <= 23) {        
+  if (webAssignments[2] > 0 && webAssignments[2] <= 24) {        
     int paramIndex = webAssignments[2] - 1;        
     parameters[paramIndex].value = fader2Value;        
     dmxValues[parameters[paramIndex].dmxChannel - 1] = fader2Value;        
   }        
           
   // Fader3        
-  if (webAssignments[3] > 0 && webAssignments[3] <= 23) {        
+  if (webAssignments[3] > 0 && webAssignments[3] <= 24) {        
     int paramIndex = webAssignments[3] - 1;        
     parameters[paramIndex].value = fader3Value;        
     dmxValues[parameters[paramIndex].dmxChannel - 1] = fader3Value;        
   }        
           
-  // Appliquer l'octave web après la mise à jour des contrôles physiques        
+  // Toujours appliquer l'octave web car elle peut être changée indépendamment        
+  // via l'interface web (boutons octave +/-)        
   applyWebOctave();        
 }        
+
+// Fonction pour initialiser 8 presets vides
+void initializeEmptyWebPresets() {
+  for (int i = 0; i < MAX_WEB_PRESETS; i++) {
+    sprintf(webPresets[i].name, "Preset %d", i + 1);
+    webPresets[i].octave = 0;
+    
+    // Initialiser tous les paramètres à 0
+    for (int j = 0; j < 27; j++) {
+      webPresets[i].values[j] = 0;
+    }
+    
+    // Initialiser les assignations à OFF
+    for (int j = 0; j < 4; j++) {
+      webPresets[i].assignments[j] = 0;
+    }
+  }
+  
+  webPresetCount = MAX_WEB_PRESETS;
+  saveWebPresets();
+  
+  Serial.println("✅ 8 presets vides initialisés");
+}
 
 // Fonction pour charger un preset web avec affichage unifié        
 void loadWebPresetUnified(int presetIndex) {        
@@ -2273,7 +2316,126 @@ void loadWebPresetUnified(int presetIndex) {
   Serial.print(presetIndex + 1);        
   Serial.print(" chargé: ");        
   Serial.println(webPresets[presetIndex].name);        
-  Serial.print("🎵 Octave: ");        
+    Serial.print("🎵 Octave: ");        
   Serial.println(webOctave);        
-}        
+}
+
+// API: Exporter tous les presets vers un fichier JSON téléchargeable
+void handleExportPresets() {
+  Serial.println("DEBUG: Exportation des presets...");
+  
+  DynamicJsonDocument doc(8192);
+  doc["version"] = "v028";
+  doc["timestamp"] = String(millis());
+  doc["preset_count"] = webPresetCount;
+  
+  JsonArray presetsArray = doc.createNestedArray("presets");
+  
+  for (int i = 0; i < MAX_WEB_PRESETS; i++) {
+    JsonObject preset = presetsArray.createNestedObject();
+    preset["slot"] = i;
+    preset["name"] = webPresets[i].name;
+    preset["octave"] = webPresets[i].octave;
+    
+    JsonArray valuesArray = preset.createNestedArray("values");
+    for (int j = 0; j < 27; j++) {
+      valuesArray.add(webPresets[i].values[j]);
+    }
+    
+    JsonArray assignmentsArray = preset.createNestedArray("assignments");
+    for (int j = 0; j < 4; j++) {
+      assignmentsArray.add(webPresets[i].assignments[j]);
+    }
+  }
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  // Générer un nom de fichier avec timestamp
+  String timestamp = String(millis());
+  String filename = "ksoloti_presets_" + timestamp + ".json";
+  
+  webServer.sendHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+  webServer.send(200, "application/json", jsonString);
+  
+  Serial.println("✅ Presets exportés: " + filename);
+}
+
+// API: Importer des presets depuis un fichier JSON uploadé
+void handleImportPresets() {
+  if (webServer.hasArg("plain")) {
+    DynamicJsonDocument doc(8192);
+    DeserializationError error = deserializeJson(doc, webServer.arg("plain"));
+    
+    if (error) {
+      Serial.println("❌ Erreur parsing JSON: " + String(error.c_str()));
+      webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Format JSON invalide\"}");
+      return;
+    }
+    
+    // Vérifier la validité du fichier
+    if (!doc.containsKey("presets") || !doc["presets"].is<JsonArray>()) {
+      webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Format de preset invalide\"}");
+      return;
+    }
+    
+    JsonArray presetsArray = doc["presets"];
+    int importedCount = 0;
+    
+    // Importer chaque preset
+    for (JsonObject preset : presetsArray) {
+      int slot = preset["slot"] | -1;
+      
+      if (slot >= 0 && slot < MAX_WEB_PRESETS) {
+        const char* name = preset["name"] | "";
+        if (strlen(name) > 0) {
+          strcpy(webPresets[slot].name, name);
+          webPresets[slot].octave = preset["octave"] | 0;
+          
+          JsonArray valuesArray = preset["values"];
+          int i = 0;
+          for (JsonVariant value : valuesArray) {
+            if (i < 27) {
+              webPresets[slot].values[i] = value | 0;
+              i++;
+            }
+          }
+          
+          JsonArray assignmentsArray = preset["assignments"];
+          int j = 0;
+          for (JsonVariant assignment : assignmentsArray) {
+            if (j < 4) {
+              webPresets[slot].assignments[j] = assignment | 0;
+              j++;
+            }
+          }
+          
+          importedCount++;
+        }
+      }
+    }
+    
+    // Mettre à jour le compteur et sauvegarder
+    if (importedCount > 0) {
+      webPresetCount = MAX_WEB_PRESETS; // Assumer tous les slots sont utilisés
+      saveWebPresets();
+      
+      DynamicJsonDocument response(256);
+      response["success"] = true;
+      response["message"] = "Presets importés avec succès";
+      response["imported_count"] = importedCount;
+      
+      String responseStr;
+      serializeJson(response, responseStr);
+      webServer.send(200, "application/json", responseStr);
+      
+      Serial.println("✅ " + String(importedCount) + " presets importés");
+    } else {
+      webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Aucun preset valide trouvé\"}");
+    }
+  } else {
+    webServer.send(400, "application/json", "{\"success\":false,\"message\":\"Données manquantes\"}");
+  }
+}
+        
         

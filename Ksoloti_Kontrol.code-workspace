@@ -1,0 +1,21 @@
+{
+	"folders": [
+		{
+			"path": "../RECEPTEUR_KSOLOTI"
+		},
+		{
+			"path": "."
+		},
+		{
+			"name": "tests_ESP32D1",
+			"path": "../tests_ESP32D1"
+		},
+		{
+			"name": "ONIRIGUN juillet 2025",
+			"path": "../ONIRIGUN juillet 2025"
+		}
+	],
+	"settings": {
+		"powershell.cwd": "ESP32 D1 MINI DMX SENDER"
+	}
+}

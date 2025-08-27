@@ -383,19 +383,19 @@ function applyPresetToInterface(presetValues) {
     updateParameter(22, presetValues[22]); // Envoyer Résonance au serveur
   }
   
-  // Mode filtre (paramètre 23 contient directement le mode)
+  // Mode filtre (paramètre 23 contient la valeur DMX 0-255)
   const filterModeValue = presetValues[23];
   
   console.log('DEBUG: Filter values - Cutoff:', presetValues[21], 'Reso:', presetValues[22], 'Mode:', filterModeValue);
   console.log('DEBUG: Preset values array length:', presetValues.length);
   console.log('DEBUG: Preset values 20-26:', presetValues.slice(20, 27));
   
-  // Déterminer le mode selon la valeur (0=OFF, 1=HP, 2=BP, 3=LP)
+  // Déterminer le mode selon la valeur DMX (0=OFF, 85=HP, 170=BP, 255=LP)
   let filterMode;
   if (filterModeValue === 0) filterMode = 'OFF';
-  else if (filterModeValue === 1) filterMode = 'HP';
-  else if (filterModeValue === 2) filterMode = 'BP';
-  else if (filterModeValue === 3) filterMode = 'LP';
+  else if (filterModeValue >= 1 && filterModeValue <= 85) filterMode = 'HP';
+  else if (filterModeValue >= 86 && filterModeValue <= 170) filterMode = 'BP';
+  else if (filterModeValue >= 171 && filterModeValue <= 255) filterMode = 'LP';
   else filterMode = 'OFF'; // défaut
   
   console.log('DEBUG: Filter mode déterminé:', filterMode);
@@ -640,6 +640,9 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Polling désactivé (trop lourd)
   // startStatusPolling();
+  
+  // Gestion des boutons d'export/import
+  setupBackupButtons();
 });
 
 // Fonction pour changer la waveform (0-6)
@@ -673,18 +676,18 @@ function setFilterMode(mode) {
   // Ajouter la classe active au bouton sélectionné
   document.getElementById('filter-' + mode.toLowerCase()).classList.add('active');
   
-  // Définir la valeur du mode filtre selon le nouveau système
+  // Définir la valeur du mode filtre selon le nouveau système (plage DMX 0-255)
   let filterModeValue;
   
   switch(mode) {
     case 'HP':
-      filterModeValue = 1; // High Pass
+      filterModeValue = 85; // High Pass (255/3 * 1)
       break;
     case 'BP':
-      filterModeValue = 2; // Band Pass
+      filterModeValue = 170; // Band Pass (255/3 * 2)
       break;
     case 'LP':
-      filterModeValue = 3; // Low Pass
+      filterModeValue = 255; // Low Pass (255/3 * 3)
       break;
     case 'OFF':
       filterModeValue = 0; // Filtre désactivé
@@ -730,3 +733,169 @@ function updateCurrentPresetDisplay(presetId) {
 // Variables pour le polling - DÉSACTIVÉ (trop lourd)
 // let lastKnownPhysicalChange = 0;
 // let statusPollingInterval = null;
+
+// Fonctions de sauvegarde/chargement des presets
+function setupBackupButtons() {
+  const exportBtn = document.getElementById('export-presets');
+  const importBtn = document.getElementById('import-presets');
+  const importFile = document.getElementById('import-file');
+  
+  if (exportBtn) {
+    exportBtn.addEventListener('click', exportPresets);
+  }
+  
+  if (importBtn) {
+    importBtn.addEventListener('click', () => {
+      importFile.click();
+    });
+  }
+  
+  if (importFile) {
+    importFile.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        importPresets(file);
+      }
+    });
+  }
+}
+
+// Fonction pour afficher des messages d'information temporaires
+function showTooltip(message, type = 'info') {
+  const tooltip = document.createElement('div');
+  tooltip.className = 'tooltip ' + type;
+  tooltip.textContent = message;
+  tooltip.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#f44336' : '#2196F3'};
+    color: white;
+    padding: 12px 20px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 10000;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    animation: slideIn 0.3s ease-out;
+  `;
+  
+  // Ajouter l'animation CSS si elle n'existe pas déjà
+  if (!document.querySelector('#tooltip-styles')) {
+    const style = document.createElement('style');
+    style.id = 'tooltip-styles';
+    style.textContent = `
+      @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  document.body.appendChild(tooltip);
+  
+  // Retirer automatiquement après 3 secondes
+  setTimeout(() => {
+    tooltip.style.animation = 'slideOut 0.3s ease-in';
+    setTimeout(() => {
+      if (tooltip.parentNode) {
+        tooltip.parentNode.removeChild(tooltip);
+      }
+    }, 300);
+  }, 3000);
+}
+
+function exportPresets() {
+  console.log('DEBUG: Exportation des presets...');
+  
+  fetch('/api/export-presets')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Erreur lors de l\'exportation');
+      }
+      
+      // Récupérer le nom de fichier depuis les headers
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = 'ksoloti_presets.json';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      return response.blob().then(blob => ({ blob, filename }));
+    })
+    .then(({ blob, filename }) => {
+      // Créer un lien de téléchargement
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      console.log('DEBUG: Presets exportés:', filename);
+      showTooltip('✅ Presets sauvegardés: ' + filename, 'success');
+    })
+    .catch(error => {
+      console.error('ERROR: Échec de l\'exportation:', error);
+      showTooltip('❌ Erreur lors de la sauvegarde', 'error');
+    });
+}
+
+function importPresets(file) {
+  console.log('DEBUG: Importation des presets...', file.name);
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const jsonData = JSON.parse(e.target.result);
+      console.log('DEBUG: Données JSON:', jsonData);
+      
+      // Envoyer les données au serveur
+      fetch('/api/import-presets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(jsonData)
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          console.log('DEBUG: Import réussi:', data);
+          showTooltip('✅ ' + data.imported_count + ' presets importés', 'success');
+          
+          // Recharger l'interface pour afficher les nouveaux presets
+          setTimeout(() => {
+            location.reload();
+          }, 1500);
+        } else {
+          console.error('ERROR: Échec de l\'import:', data.message);
+          showTooltip('❌ ' + data.message, 'error');
+        }
+      })
+      .catch(error => {
+        console.error('ERROR: Erreur réseau lors de l\'import:', error);
+        showTooltip('❌ Erreur de communication', 'error');
+      });
+      
+    } catch (error) {
+      console.error('ERROR: Fichier JSON invalide:', error);
+      showTooltip('❌ Fichier JSON invalide', 'error');
+    }
+  };
+  
+  reader.readAsText(file);
+  
+  // Réinitialiser l'input file
+  document.getElementById('import-file').value = '';
+}
