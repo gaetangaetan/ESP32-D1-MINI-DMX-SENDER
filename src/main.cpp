@@ -248,6 +248,11 @@ bool muteMode = false;  // Mode mute activé/désactivé (bouton 3 clic court)
 bool button3LongPress = false;  // Clic long bouton 3 pour delay feedback max
 unsigned long button3PressStartTime = 0;  // Temps de début d'appui bouton 3
 const unsigned long LONG_PRESS_DURATION = 800;  // Durée pour considérer un clic long (ms)
+
+// Variables pour le debounce des boutons 1 et 2
+unsigned long lastButton1Press = 0;
+unsigned long lastButton2Press = 0;
+const unsigned long BUTTON_DEBOUNCE_TIME = 200;  // 200ms de debounce
         
 // Variables pour les faders        
 uint8_t faderValues[3] = {0, 0, 0};        
@@ -913,9 +918,9 @@ void initializeButtonInterrupts() {
   pinMode(BUTTON_2_PIN, INPUT_PULLUP);        
   pinMode(BUTTON_3_PIN, INPUT_PULLUP);        
           
-  // Attacher les interruptions (FALLING car INPUT_PULLUP)        
-  attachInterrupt(digitalPinToInterrupt(BUTTON_1_PIN), button1ISR, FALLING);        
-  attachInterrupt(digitalPinToInterrupt(BUTTON_2_PIN), button2ISR, FALLING);        
+  // Attacher seulement l'interruption pour le bouton 3 (boutons 1 et 2 gérés par polling)        
+  // attachInterrupt(digitalPinToInterrupt(BUTTON_1_PIN), button1ISR, FALLING);        
+  // attachInterrupt(digitalPinToInterrupt(BUTTON_2_PIN), button2ISR, FALLING);        
   attachInterrupt(digitalPinToInterrupt(BUTTON_3_PIN), button3ISR, FALLING);        
           
   Serial.println("Interruptions de boutons configurées");        
@@ -1001,8 +1006,33 @@ void handleButtons() {
   bool button2State = !digitalRead(BUTTON_2_PIN);        
   bool button3State = !digitalRead(BUTTON_3_PIN);        
           
-  // Les boutons 1 et 2 utilisent maintenant les interruptions pour la navigation des presets
-  // (voir handleButtonInterrupts)
+  // Bouton 1 - Décrémenter preset avec debounce
+  if (button1State && !lastButtonStates[0] && (millis() - lastButton1Press > BUTTON_DEBOUNCE_TIME)) {
+    if (selectedWebPreset > 1) {
+      selectedWebPreset--;
+    } else {
+      selectedWebPreset = 8; // Boucler vers P8 quand on est en P1
+    }
+    loadWebPresetUnified(selectedWebPreset - 1); // Convertir 1-8 en 0-7
+    Serial.print("Bouton 1 - Web preset descendu et chargé: P");
+    Serial.println(selectedWebPreset);
+    displayUnified();
+    lastButton1Press = millis();
+  }
+  
+  // Bouton 2 - Incrémenter preset avec debounce
+  if (button2State && !lastButtonStates[1] && (millis() - lastButton2Press > BUTTON_DEBOUNCE_TIME)) {
+    if (selectedWebPreset < 8) {
+      selectedWebPreset++;
+    } else {
+      selectedWebPreset = 1; // Boucler vers P1 quand on est en P8
+    }
+    loadWebPresetUnified(selectedWebPreset - 1); // Convertir 1-8 en 0-7
+    Serial.print("Bouton 2 - Web preset monté et chargé: P");
+    Serial.println(selectedWebPreset);
+    displayUnified();
+    lastButton2Press = millis();
+  }
           
   // Bouton 3 - Gestion mute/unmute et delay feedback        
   // Détecter le début d'un appui (front montant)
@@ -1020,6 +1050,7 @@ void handleButtons() {
       muteMode = !muteMode;        
       Serial.print("Bouton 3 - Mode mute ");        
       Serial.println(muteMode ? "ACTIVÉ" : "DÉSACTIVÉ");        
+      displayUnified(); // Mettre à jour l'affichage pour montrer/cacher "MutE"
     }        
     
     // Réinitialiser le flag de clic long quand on relâche        
@@ -1040,42 +1071,9 @@ void handleButtons() {
         
 // Fonction pour gérer les boutons avec interruptions        
 void handleButtonInterrupts() {        
-  // Traiter les interruptions du bouton 1 (descendre dans les web presets et charger)        
-  if (buttonInterruptFlags[0]) {        
-    // Navigation dans les web presets : descendre (P1-P8)
-    if (selectedWebPreset > 1) {        
-      selectedWebPreset--;        
-    } else {        
-      selectedWebPreset = 8; // Boucler vers P8 quand on est en P1        
-    }        
-    
-    // Charger le web preset sélectionné (comme un clic sur l'encodeur)        
-    loadWebPresetUnified(selectedWebPreset - 1); // Convertir 1-8 en 0-7        
-    Serial.print("Bouton 1 - Web preset descendu et chargé: P");        
-    Serial.println(selectedWebPreset);        
-    displayUnified();        
-    
-    buttonInterruptFlags[0] = false;        
-  }        
-          
-  // Traiter les interruptions du bouton 2 (monter dans les web presets et charger)        
-  if (buttonInterruptFlags[1]) {        
-    // Navigation dans les web presets : monter (P1-P8)
-    if (selectedWebPreset < 8) {        
-      selectedWebPreset++;        
-    } else {        
-      selectedWebPreset = 1; // Boucler vers P1 quand on est en P8        
-    }        
-    
-    // Charger le web preset sélectionné (comme un clic sur l'encodeur)        
-    loadWebPresetUnified(selectedWebPreset - 1); // Convertir 1-8 en 0-7        
-    Serial.print("Bouton 2 - Web preset monté et chargé: P");        
-    Serial.println(selectedWebPreset);        
-    displayUnified();        
-    
-    buttonInterruptFlags[1] = false;        
-  }        
-          
+  // Les boutons 1 et 2 sont maintenant gérés par polling dans handleButtons()
+  // pour éviter les problèmes de debounce des interruptions
+  
   // Traiter les interruptions du bouton 3 (gestion mute/delay feedback)        
   if (buttonInterruptFlags[2]) {        
     // Cette fonction est maintenant gérée dans handleButtons() pour le clic long
