@@ -242,6 +242,12 @@ const unsigned long BUTTON_DEBOUNCE = 100; // 200ms de debounce
 // Variables pour les interruptions de boutons        
 volatile bool buttonInterruptFlags[3] = {false, false, false};        
 volatile unsigned long buttonInterruptTimes[3] = {0, 0, 0};        
+
+// Variables pour les nouvelles fonctions des boutons
+bool muteMode = false;  // Mode mute activé/désactivé (bouton 3 clic court)
+bool button3LongPress = false;  // Clic long bouton 3 pour delay feedback max
+unsigned long button3PressStartTime = 0;  // Temps de début d'appui bouton 3
+const unsigned long LONG_PRESS_DURATION = 800;  // Durée pour considérer un clic long (ms)
         
 // Variables pour les faders        
 uint8_t faderValues[3] = {0, 0, 0};        
@@ -772,8 +778,8 @@ void handlePhysicalControls() {
   uint8_t fader2Value = (4095 - analogRead(FADER_2_PIN)) / 16;        
   uint8_t fader3Value = (4095 - analogRead(FADER_3_PIN)) / 16;        
           
-  // Lecture du bouton 3        
-  bool button3State = !digitalRead(BUTTON_3_PIN);        
+  // Le bouton 3 a maintenant une nouvelle fonction (mute/clic long) 
+  // Il n'est plus géré ici mais dans handleButtons()
           
   // Lire les liens des contrôles directement depuis le preset actuel        
   uint8_t ir1TargetParam = getParameter("ir1_target_param");        
@@ -781,7 +787,6 @@ void handlePhysicalControls() {
   uint8_t fader1TargetParam = getParameter("fader1_target_param");        
   uint8_t fader2TargetParam = getParameter("fader2_target_param");        
   uint8_t fader3TargetParam = getParameter("fader3_target_param");        
-  uint8_t button3TargetParam = getParameter("button3_target_param");        
           
   // Appliquer les valeurs aux paramètres cibles selon les liens du preset        
   if (ir1TargetParam >= 0 && ir1TargetParam < PRESET_SIZE) {        
@@ -807,13 +812,7 @@ void handlePhysicalControls() {
         
   
           
-  // Gestion du bouton 3 avec valeurs released/pressed        
-  if (button3TargetParam > 0 && button3TargetParam < PRESET_SIZE) {        
-    uint8_t button3ReleasedValue = getParameter("button3_released_value");        
-    uint8_t button3PressedValue = getParameter("button3_pressed_value");        
-    uint8_t button3TargetValue = button3State ? button3PressedValue : button3ReleasedValue;        
-    setParameter(parameters[button3TargetParam].name, button3TargetValue);        
-  }        
+  // Le bouton 3 n'est plus géré ici - voir handleButtons() pour sa nouvelle fonction        
           
   // Mettre à jour le dimmer RGB        
   updateRGBWithDimmer();        
@@ -1002,82 +1001,84 @@ void handleButtons() {
   bool button2State = !digitalRead(BUTTON_2_PIN);        
   bool button3State = !digitalRead(BUTTON_3_PIN);        
           
-  // Bouton 1 - Déclencher trig_kick (paramètre 17, canal DMX 117)        
-  if (button1State && !lastButtonStates[0] && (millis() - lastButtonPress[0] > BUTTON_DEBOUNCE)) {        
-    dmxValues[116] = 255; // Canal DMX 117 (index 116)        
-    //Serial.println("Bouton 1 - Trig Kick déclenché");        
-    lastButtonPress[0] = millis();        
+  // Les boutons 1 et 2 utilisent maintenant les interruptions pour la navigation des presets
+  // (voir handleButtonInterrupts)
+          
+  // Bouton 3 - Gestion mute/unmute et delay feedback        
+  // Détecter le début d'un appui (front montant)
+  if (button3State && !lastButtonStates[2]) {        
+    button3PressStartTime = millis();        
+    button3LongPress = false;
   }        
+  
+  // Détecter la fin d'un appui (front descendant)
+  if (!button3State && lastButtonStates[2]) {        
+    unsigned long pressDuration = millis() - button3PressStartTime;        
+    
+    if (pressDuration < LONG_PRESS_DURATION) {        
+      // Clic court : toggle mute/unmute        
+      muteMode = !muteMode;        
+      Serial.print("Bouton 3 - Mode mute ");        
+      Serial.println(muteMode ? "ACTIVÉ" : "DÉSACTIVÉ");        
+    }        
+    
+    // Réinitialiser le flag de clic long quand on relâche        
+    button3LongPress = false;        
+  }        
+  
+  // Détecter le clic long pendant qu'on maintient le bouton        
+  if (button3State && (millis() - button3PressStartTime >= LONG_PRESS_DURATION) && !button3LongPress) {        
+    button3LongPress = true;        
+    Serial.println("Bouton 3 - Clic long : delay feedback MAX");        
+  }        
+  
   lastButtonStates[0] = button1State;        
-          
-  // Bouton 2 - Déclencher trig_snare (paramètre 18, canal DMX 118)        
-  if (button2State && !lastButtonStates[1] && (millis() - lastButtonPress[1] > BUTTON_DEBOUNCE)) {        
-    dmxValues[117] = 255; // Canal DMX 118 (index 117)        
-    //Serial.println("Bouton 2 - Trig Snare déclenché");        
-    lastButtonPress[1] = millis();        
-  }        
   lastButtonStates[1] = button2State;        
-          
-  // Bouton 3 - Charger preset 2        
-  if (button3State && !lastButtonStates[2] && (millis() - lastButtonPress[2] > BUTTON_DEBOUNCE)) {        
-    //dmxValues[116] = 255; // KICK        
-    //Serial.println("Bouton 3 - Preset 2 chargé");        
-    lastButtonPress[2] = millis();        
-  }        
   lastButtonStates[2] = button3State;        
 }        
         
         
 // Fonction pour gérer les boutons avec interruptions        
 void handleButtonInterrupts() {        
-  // Traiter les interruptions du bouton 1 (décrémenter transposition)        
+  // Traiter les interruptions du bouton 1 (descendre dans les web presets et charger)        
   if (buttonInterruptFlags[0]) {        
-    // Ne pas traiter la transposition en mode web (preset 0)        
-    if (selectedPreset != 0 && transpose > -12) {        
-      transpose--;        
-      Serial.print("Bouton 1 - Transposition décrémentée: ");        
-      Serial.println(transpose);        
-              
-      // Afficher immédiatement la nouvelle transposition        
-      displayUnified();        
-              
-      // Recharger le preset pour appliquer la nouvelle transposition        
-      loadPreset(selectedPreset);        
-              
-      // Mettre à jour le gate_threshold avec la nouvelle transposition        
-      updateGateThresholdWithTranspose();        
-    } else if (selectedPreset == 0) {        
-      Serial.println("Bouton 1 - Transposition désactivée en mode web");        
+    // Navigation dans les web presets : descendre (P1-P8)
+    if (selectedWebPreset > 1) {        
+      selectedWebPreset--;        
+    } else {        
+      selectedWebPreset = 8; // Boucler vers P8 quand on est en P1        
     }        
+    
+    // Charger le web preset sélectionné (comme un clic sur l'encodeur)        
+    loadWebPresetUnified(selectedWebPreset - 1); // Convertir 1-8 en 0-7        
+    Serial.print("Bouton 1 - Web preset descendu et chargé: P");        
+    Serial.println(selectedWebPreset);        
+    displayUnified();        
+    
     buttonInterruptFlags[0] = false;        
   }        
           
-  // Traiter les interruptions du bouton 2 (incrémenter transposition)        
+  // Traiter les interruptions du bouton 2 (monter dans les web presets et charger)        
   if (buttonInterruptFlags[1]) {        
-    // Ne pas traiter la transposition en mode web (preset 0)        
-    if (selectedPreset != 0 && transpose < 12) {        
-      transpose++;        
-      Serial.print("Bouton 2 - Transposition incrémentée: ");        
-      Serial.println(transpose);        
-              
-      // Afficher immédiatement la nouvelle transposition        
-      displayUnified();        
-              
-      // Recharger le preset pour appliquer la nouvelle transposition        
-      loadPreset(selectedPreset);        
-              
-      // Mettre à jour le gate_threshold avec la nouvelle transposition        
-      updateGateThresholdWithTranspose();        
-    } else if (selectedPreset == 0) {        
-      Serial.println("Bouton 2 - Transposition désactivée en mode web");        
+    // Navigation dans les web presets : monter (P1-P8)
+    if (selectedWebPreset < 8) {        
+      selectedWebPreset++;        
+    } else {        
+      selectedWebPreset = 1; // Boucler vers P1 quand on est en P8        
     }        
+    
+    // Charger le web preset sélectionné (comme un clic sur l'encodeur)        
+    loadWebPresetUnified(selectedWebPreset - 1); // Convertir 1-8 en 0-7        
+    Serial.print("Bouton 2 - Web preset monté et chargé: P");        
+    Serial.println(selectedWebPreset);        
+    displayUnified();        
+    
     buttonInterruptFlags[1] = false;        
   }        
           
-  // Traiter les interruptions du bouton 3 (trig_hh)        
+  // Traiter les interruptions du bouton 3 (gestion mute/delay feedback)        
   if (buttonInterruptFlags[2]) {        
-    dmxValues[118] = TRIG_LENGTH; // Canal DMX 119 (trig_hh)        
-    Serial.println("Bouton 3 - Trig HH déclenché (ISR) - Durée: " + String(TRIG_LENGTH));        
+    // Cette fonction est maintenant gérée dans handleButtons() pour le clic long
     buttonInterruptFlags[2] = false;        
   }        
 }        
@@ -1085,23 +1086,19 @@ void handleButtonInterrupts() {
         
 // Fonction pour gérer l'encodeur KY-040 - Système unifié web presets        
 void handleEncoder() {        
-  int32_t currentEncoderValue = - encoder.getCount();        
-          
-  // Navigation des web presets (1-8) selon la formule : |valeur_encoder / 2| % 8 + 1        
-  int32_t normalizedValue = abs(currentEncoderValue / 2);        
-  uint8_t newWebPreset = (normalizedValue % 8) + 1; // 1-8        
-          
-  // Si le preset sélectionné a changé (rotation de l'encodeur)        
-  if (newWebPreset != selectedWebPreset) {        
-    selectedWebPreset = newWebPreset;        
-            
-    // Afficher immédiatement le nouveau preset sélectionné (sans charger)        
-    displayUnified();        
-            
-    // Debug sur le moniteur série        
-    Serial.print("🔄 Preset web sélectionné: P");        
-    Serial.println(selectedWebPreset);        
-  }        
+  // *** NAVIGATION PAR ROTATION DÉSACTIVÉE ***
+  // L'encodeur rotatif est défaillant et interfère avec la navigation par boutons
+  // On garde seulement le bouton de l'encodeur pour charger les presets
+  
+  // int32_t currentEncoderValue = - encoder.getCount();        
+  // int32_t normalizedValue = abs(currentEncoderValue / 2);        
+  // uint8_t newWebPreset = (normalizedValue % 8) + 1; // 1-8        
+  // if (newWebPreset != selectedWebPreset) {        
+  //   selectedWebPreset = newWebPreset;        
+  //   displayUnified();        
+  //   Serial.print("🔄 Preset web sélectionné: P");        
+  //   Serial.println(selectedWebPreset);        
+  // }        
           
   // Gestion du bouton de l'encodeur (charger le preset sélectionné)        
   bool encoderButtonState = !digitalRead(ENCODER_BUTTON_PIN);        
@@ -1120,23 +1117,18 @@ void handleEncoder() {
         
 // Fonction pour afficher l'octave et le preset web de manière unifiée        
 void displayUnified() {        
-  // Vérifier si on affiche "LOAd"        
-  if (isDisplayingLoad) {        
-    if (millis() - loadDisplayStartTime >= 1000) {        
-      // Arrêter l'affichage "LOAd" après 1 seconde        
-      isDisplayingLoad = false;        
-    } else {        
-      // Afficher "LOAd"        
-      uint8_t loadSegments[4] = {        
-        0x38, // L        
-        0x3F, // O        
-        0x77, // A        
-        0x5E  // d        
-      };        
-      display.setSegments(loadSegments);        
-      return;        
-    }        
-  }        
+  // Vérifier si on est en mode mute
+  if (muteMode) {
+    // Afficher "MutE"
+    uint8_t muteSegments[4] = {
+      0x54, // M
+      0x1C, // u 
+      0x78, // t
+      0x79  // E
+    };
+    display.setSegments(muteSegments);
+    return;
+  }
           
   // Format unifié: OOPP où OO = octave (-12 à +12) et PP = preset web (P1-P8)        
   // Exemples:         
@@ -1290,6 +1282,20 @@ void setup()
         
 void sendDMXvalues()        
 {        
+  // Appliquer les overrides avant l'envoi
+  uint8_t originalMasterVolume = dmxValues[119]; // Canal DMX 120 (master_volume)
+  uint8_t originalDelayFeedback = dmxValues[105]; // Canal DMX 106 (delay_feedback)
+  
+  // Override du master volume en mode mute (255 = mute car volume inversé)
+  if (muteMode) {
+    dmxValues[119] = 255;
+  }
+  
+  // Override du delay feedback en clic long (255 = maximum)
+  if (button3LongPress) {
+    dmxValues[105] = 255;
+  }
+        
   // Envoi des 4 paquets DMX (512 canaux divisés en 4 blocs de 128)        
   for (int packetNumber = 0; packetNumber < 4; packetNumber++)        
   {        
@@ -1315,6 +1321,10 @@ void sendDMXvalues()
       Serial.print(" [ERREUR]");        
     }        
   }        
+          
+  // Restaurer les valeurs originales après l'envoi (pour ne pas affecter les paramètres stockés)
+  dmxValues[119] = originalMasterVolume;  // Restaurer master_volume
+  dmxValues[105] = originalDelayFeedback;  // Restaurer delay_feedback
           
   // Décrémenter les canaux trig_kick, trig_snare et trig_hh après l'envoi        
   if (dmxValues[116] > 0) dmxValues[116]--; // Canal DMX 117 (trig_kick)        
@@ -1452,7 +1462,8 @@ void loop()
  // readFaders();        
           
   // Gestion des boutons push        
-  handleButtonInterrupts();        
+  handleButtonInterrupts();
+  handleButtons();  // Gestion du bouton 3 (mute/unmute et clic long)
           
   // Gestion du serveur web (limité à 10Hz pour éviter la surcharge)        
   static unsigned long lastWebServerUpdate = 0;        
@@ -1774,10 +1785,13 @@ void handleSaveWebPreset() {
         }        
       }        
               
-      // Mettre à jour webPresetCount si nécessaire        
-      if (slot >= webPresetCount) {        
-        webPresetCount = slot + 1;        
-      }        
+      // Recalculer webPresetCount correctement (compter tous les presets avec un nom)
+      webPresetCount = 0;
+      for (int i = 0; i < MAX_WEB_PRESETS; i++) {
+        if (strlen(webPresets[i].name) > 0) {
+          webPresetCount++;
+        }
+      }
               
       saveWebPresets();        
               
@@ -1804,8 +1818,8 @@ void handleLoadWebPreset() {
             
     int id = doc["id"];        
             
-    // Vérifier que le slot existe et contient des données        
-    if (id >= 0 && id < MAX_WEB_PRESETS && id < webPresetCount && strlen(webPresets[id].name) > 0) {        
+    // Vérifier que le slot existe et contient des données (on ignore webPresetCount)       
+    if (id >= 0 && id < MAX_WEB_PRESETS && strlen(webPresets[id].name) > 0) {        
       // Appliquer les valeurs du preset        
       for (int i = 0; i < 27; i++) {        
         parameters[i].value = webPresets[id].values[i];        
@@ -1869,10 +1883,13 @@ void handleListWebPresets() {
   DynamicJsonDocument doc(2048);        
   JsonArray presetsArray = doc.createNestedArray("presets");        
           
-  for (int i = 0; i < webPresetCount; i++) {        
-    JsonObject preset = presetsArray.createNestedObject();        
-    preset["name"] = webPresets[i].name;        
-    preset["id"] = i;        
+  // Parcourir TOUS les slots (0-7) et vérifier lesquels ont un nom
+  for (int i = 0; i < MAX_WEB_PRESETS; i++) {        
+    if (strlen(webPresets[i].name) > 0) {  // Seulement les presets avec un nom
+      JsonObject preset = presetsArray.createNestedObject();        
+      preset["name"] = webPresets[i].name;        
+      preset["id"] = i;        
+    }
   }        
           
   String response;        
@@ -1951,14 +1968,37 @@ void handleNotFound() {
         
 // Sauvegarde des presets web dans LittleFS        
 void saveWebPresets() {        
+  Serial.println("=== DEBUG SAUVEGARDE PRESETS ===");
+  
+  // Afficher d'abord ce qui est en mémoire
+  for (int i = 0; i < MAX_WEB_PRESETS; i++) {        
+    Serial.print("Slot ");
+    Serial.print(i);
+    Serial.print(" en mémoire: ");
+    if (strlen(webPresets[i].name) > 0) {        
+      Serial.print("\"");
+      Serial.print(webPresets[i].name);        
+      Serial.println("\" ✓");
+    } else {        
+      Serial.println("VIDE");
+    }        
+  }
+  
   File file = LittleFS.open("/web_presets.json", "w");        
   if (file) {        
-    DynamicJsonDocument doc(4096);        
+    DynamicJsonDocument doc(8192);  // Augmenter aussi le buffer de sauvegarde        
     JsonArray presetsArray = doc.createNestedArray("presets");        
+    
+    int savedCount = 0;
             
     for (int i = 0; i < MAX_WEB_PRESETS; i++) {        
       // Sauvegarder seulement les slots qui contiennent des données        
       if (strlen(webPresets[i].name) > 0) {        
+        Serial.print("Sauvegarde du slot ");
+        Serial.print(i);
+        Serial.print(": ");
+        Serial.println(webPresets[i].name);
+        
         JsonObject preset = presetsArray.createNestedObject();        
         preset["slot"] = i;  // Sauvegarder le numéro de slot        
         preset["name"] = webPresets[i].name;        
@@ -1973,14 +2013,30 @@ void saveWebPresets() {
         JsonArray assignmentsArray = preset.createNestedArray("assignments");        
         for (int j = 0; j < 4; j++) {        
           assignmentsArray.add(webPresets[i].assignments[j]);        
-        }        
+        }
+        
+        savedCount++;        
       }        
     }        
             
-    serializeJson(doc, file);        
+    // Debug: vérifier la taille du JSON généré
+    size_t jsonSize = measureJson(doc);
+    Serial.print("DEBUG: Taille du JSON généré: ");
+    Serial.print(jsonSize);
+    Serial.println(" bytes");
+    
+    size_t bytesWritten = serializeJson(doc, file);        
     file.close();        
-    Serial.println("≡ƒÆ╛ Presets web sauvegardés");        
-  }        
+    
+    Serial.print("✅ ");
+    Serial.print(savedCount);
+    Serial.print(" presets web sauvegardés dans le fichier (");
+    Serial.print(bytesWritten);
+    Serial.println(" bytes écrits)");        
+  } else {
+    Serial.println("❌ Erreur: impossible d'ouvrir le fichier pour sauvegarde");
+  }
+  Serial.println("===============================");        
 }        
         
 // Chargement des presets web depuis LittleFS        
@@ -2006,15 +2062,34 @@ void loadWebPresets() {
           
   if (file) {        
     Serial.println("DEBUG: Fichier ouvert avec succès");        
-    DynamicJsonDocument doc(4096);        
-    deserializeJson(doc, file);        
-    file.close();        
+    DynamicJsonDocument doc(8192);  // Doubler la taille pour 8 presets complets      
+    DeserializationError error = deserializeJson(doc, file);
+    
+    if (error) {
+      Serial.print("❌ Erreur parsing JSON: ");
+      Serial.println(error.c_str());
+      file.close();
+      return;
+    }        
             
     JsonArray presetsArray = doc["presets"];        
-    webPresetCount = 0;        
+    
+    // DEBUG: Afficher combien de presets sont dans le JSON
+    Serial.print("DEBUG: Nombre de presets trouvés dans le JSON: ");
+    Serial.println(presetsArray.size());
+    
+    // D'abord vider tous les noms pour éviter les résidus
+    for (int i = 0; i < MAX_WEB_PRESETS; i++) {
+      webPresets[i].name[0] = '\0';  // Vider le nom
+    }
             
-    for (JsonObject preset : presetsArray) {        
-      int slot = preset["slot"]; // Récupérer le numéro de slot        
+    for (JsonObject preset : presetsArray) {
+      int slot = preset["slot"];
+      const char* name = preset["name"];
+      Serial.print("DEBUG: Traitement preset JSON slot ");
+      Serial.print(slot);
+      Serial.print(", nom: ");
+      Serial.println(name ? name : "NULL");        
               
       if (slot >= 0 && slot < MAX_WEB_PRESETS) {        
         strcpy(webPresets[slot].name, preset["name"]);        
@@ -2047,14 +2122,33 @@ void loadWebPresets() {
             webPresets[slot].assignments[j] = 0;        
           }        
         }        
-                
-        // Mettre à jour webPresetCount si nécessaire        
-        if (slot >= webPresetCount) {        
-          webPresetCount = slot + 1;        
-        }        
       }        
+    }
+    
+    // Recalculer webPresetCount en comptant tous les presets avec un nom
+    webPresetCount = 0;
+    for (int i = 0; i < MAX_WEB_PRESETS; i++) {
+      if (strlen(webPresets[i].name) > 0) {
+        webPresetCount++;
+      }
     }        
             
+    // Debug détaillé - afficher tous les presets trouvés
+    Serial.println("=== DEBUG PRESETS CHARGÉS ===");
+    for (int i = 0; i < MAX_WEB_PRESETS; i++) {
+      Serial.print("Slot ");
+      Serial.print(i);
+      Serial.print(": ");
+      if (strlen(webPresets[i].name) > 0) {
+        Serial.print("\"");
+        Serial.print(webPresets[i].name);
+        Serial.println("\" ✓");
+      } else {
+        Serial.println("VIDE");
+      }
+    }
+    Serial.println("=============================");
+    
     Serial.print("✅ ");        
     Serial.print(webPresetCount);        
     Serial.println(" presets web chargés");        
@@ -2257,20 +2351,17 @@ void initializeEmptyWebPresets() {
 
 // Fonction pour charger un preset web avec affichage unifié        
 void loadWebPresetUnified(int presetIndex) {        
-  // Vérifier que le preset existe        
+  // Vérifier que le preset existe (on ignore webPresetCount et on vérifie directement le nom)       
   if (presetIndex < 0 || presetIndex >= MAX_WEB_PRESETS || 
-      presetIndex >= webPresetCount || strlen(webPresets[presetIndex].name) == 0) {        
+      strlen(webPresets[presetIndex].name) == 0) {        
     Serial.print("❌ Preset web P");        
     Serial.print(presetIndex + 1);        
     Serial.println(" n'existe pas ou est vide");        
     return;        
   }        
           
-  // Démarrer l'affichage "LOAd"        
-  isDisplayingLoad = true;        
-  loadDisplayStartTime = millis();        
+  // Affichage "LOAd" supprimé - affichage direct du preset
   lastPhysicalPresetChange = millis(); // Marquer le changement physique        
-  displayUnified(); // Afficher "LOAd" immédiatement        
           
   // Appliquer les valeurs du preset        
   for (int i = 0; i < 27; i++) {        
@@ -2307,6 +2398,9 @@ void loadWebPresetUnified(int presetIndex) {
           
   // Mettre à jour le dernier preset web utilisé        
   lastWebPreset = presetIndex;        
+  
+  // Mettre à jour le preset web sélectionné (pour l'affichage et les boutons)
+  selectedWebPreset = presetIndex + 1; // Convertir 0-7 en 1-8
           
   // Sauvegarder l'état dans le preset 0 pour persistance        
   saveWebStateToPreset0();        
@@ -2417,6 +2511,10 @@ void handleImportPresets() {
     
     // Mettre à jour le compteur et sauvegarder
     if (importedCount > 0) {
+      // Forcer la suppression de l'ancien fichier pour éviter les problèmes de cache
+      LittleFS.remove("/web_presets.json");
+      Serial.println("🗑️ Ancien fichier presets supprimé");
+      
       webPresetCount = MAX_WEB_PRESETS; // Assumer tous les slots sont utilisés
       saveWebPresets();
       

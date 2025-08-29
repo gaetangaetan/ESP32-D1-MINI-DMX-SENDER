@@ -113,13 +113,13 @@ function savePreset(presetId) {
   const filterResoSlider = document.getElementById('filter-reso');
   values.push(filterResoSlider ? parseInt(filterResoSlider.value) : 0);
   
-  // Déterminer le mode filtre depuis les boutons
-  let filterMode = 0; // 0 = OFF par défaut
-  if (document.getElementById('filter-hp').classList.contains('active')) filterMode = 1; // HP
-  else if (document.getElementById('filter-bp').classList.contains('active')) filterMode = 2; // BP  
-  else if (document.getElementById('filter-lp').classList.contains('active')) filterMode = 3; // LP
-  else if (document.getElementById('filter-off').classList.contains('active')) filterMode = 0; // OFF
-  values.push(filterMode);
+  // Déterminer le mode filtre depuis les boutons et convertir en valeurs DMX
+  let filterModeValue = 0; // 0 = OFF par défaut
+  if (document.getElementById('filter-hp').classList.contains('active')) filterModeValue = 85; // HP
+  else if (document.getElementById('filter-bp').classList.contains('active')) filterModeValue = 170; // BP  
+  else if (document.getElementById('filter-lp').classList.contains('active')) filterModeValue = 255; // LP
+  else if (document.getElementById('filter-off').classList.contains('active')) filterModeValue = 0; // OFF
+  values.push(filterModeValue);
   
   // Paramètres RGB (24-26)
   values.push(parseInt(document.getElementById('rgb-red-value').textContent));
