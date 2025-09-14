@@ -11,7 +11,7 @@
         
 // adresse mac de l'onirigun : 68:C6:3A:FD:37:17 (géré par le récepteur Ksoloti)        
         
-#define VERSION 165 // l'onirigun est pris en charge par le récepteur ksoloti        
+#define VERSION 1757857752 // Version basée sur timestamp Unix        
 /*        
 // Contrôleur interactif ESP32 avec capteurs Sharp IR        
 // Utilise ESP-NOW pour transmettre les données DMX        
@@ -59,7 +59,7 @@
         
 // Définitions pour le ruban WS2812B        
 #define LED_STRIP_PIN 4    // GPIO4 - Signal DATA du WS2812B        
-#define NUM_LEDS 144         // Nombre de LEDs dans le ruban (ajustable)        
+const int NUM_LEDS = 144;         // Nombre de LEDs dans le ruban (ajustable)        
 #define BRIGHTNESS 64      // Luminosité (0-255)        
         
 // Configuration ESP-NOW        
@@ -1329,6 +1329,8 @@ void setup()
 {        
   Serial.begin(115200);        
   Serial.println("=== Contrôleur Interactif ESP32 ===");        
+  Serial.print("Version: ");
+  Serial.println(VERSION);
   Serial.println("Initialisation...");        
           
   // === VÉRIFICATION DU MODE DE DÉMARRAGE ===        

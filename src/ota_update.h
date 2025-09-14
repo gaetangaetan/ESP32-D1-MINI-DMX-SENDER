@@ -6,6 +6,11 @@
 #include <HTTPClient.h>
 #include <Update.h>
 #include <LittleFS.h>
+#include <FastLED.h>
+
+// Déclaration externe des LEDs du code principal
+extern CRGB leds[];
+extern const int NUM_LEDS;
 
 // Configuration OTA
 #define OTA_WIFI_SSID "mrVOOlpy"
@@ -44,6 +49,9 @@ private:
   bool connectToWiFi();
   bool downloadAndInstallLittleFS();
   bool downloadAndInstallFirmware();
+  void showBlinkPattern(CRGB color, int count, int duration);
+  void showProgressBar(CRGB color, int pixels);
+  void clearLEDs();
   
 public:
   OTAUpdate();

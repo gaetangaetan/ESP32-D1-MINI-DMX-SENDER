@@ -1,5 +1,9 @@
 console.log('DEBUG: Script.js chargé - début d\'exécution');
 
+// Version du système
+const VERSION = 1757857752;
+console.log('Version:', VERSION);
+
 // Noms des paramètres
 const paramNames = [
   'Autopan Depth', 'Pitch', 'Vibrato Speed', 'Vibrato Depth', 'Delay Time',

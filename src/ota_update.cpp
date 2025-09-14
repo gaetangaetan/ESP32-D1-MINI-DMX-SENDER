@@ -108,6 +108,49 @@ bool OTAUpdate::checkButton1Pressed() {
   return !digitalRead(22);
 }
 
+void OTAUpdate::showBlinkPattern(CRGB color, int count, int duration) {
+  Serial.print("Pattern LED: ");
+  Serial.print(count);
+  Serial.println(" clignottements");
+  
+  for (int i = 0; i < count; i++) {
+    // Allumer toutes les LEDs
+    for (int j = 0; j < NUM_LEDS; j++) {
+      leds[j] = color;
+    }
+    FastLED.show();
+    delay(duration);
+    
+    // Éteindre toutes les LEDs
+    clearLEDs();
+    delay(duration);
+  }
+}
+
+void OTAUpdate::showProgressBar(CRGB color, int pixels) {
+  // Effacer toutes les LEDs
+  clearLEDs();
+  
+  // Allumer les pixels de progression
+  for (int i = 0; i < pixels && i < NUM_LEDS; i++) {
+    leds[i] = color;
+  }
+  
+  FastLED.show();
+  
+  Serial.print("Progression: ");
+  Serial.print(pixels);
+  Serial.print("/");
+  Serial.println(NUM_LEDS);
+}
+
+void OTAUpdate::clearLEDs() {
+  for (int i = 0; i < NUM_LEDS; i++) {
+    leds[i] = CRGB(0, 0, 0);
+  }
+  FastLED.show();
+}
+
 bool OTAUpdate::connectToWiFi() {
   Serial.print("Connexion au WiFi: ");
   Serial.println(OTA_WIFI_SSID);
@@ -115,20 +158,39 @@ bool OTAUpdate::connectToWiFi() {
   WiFi.begin(OTA_WIFI_SSID, OTA_WIFI_PASSWORD);
   
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+  int maxAttempts = 20;
+  int progressStep = NUM_LEDS / maxAttempts;
+  
+  while (WiFi.status() != WL_CONNECTED && attempts < maxAttempts) {
     delay(500);
     Serial.print(".");
     attempts++;
+    
+    // Mettre à jour la barre de progression jaune
+    int progressPixels = attempts * progressStep;
+    showProgressBar(CRGB(255, 255, 0), progressPixels); // Jaune
   }
   
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println();
     Serial.print("WiFi connecté! Adresse IP: ");
     Serial.println(WiFi.localIP());
+    
+    // Barre de progression complète en vert pour indiquer le succès
+    showProgressBar(CRGB(0, 255, 0), NUM_LEDS);
+    delay(1000);
+    clearLEDs();
+    
     return true;
   } else {
     Serial.println();
     Serial.println("Échec de connexion WiFi");
+    
+    // Barre de progression rouge pour indiquer l'échec
+    showProgressBar(CRGB(255, 0, 0), NUM_LEDS);
+    delay(1000);
+    clearLEDs();
+    
     return false;
   }
 }
@@ -159,6 +221,7 @@ bool OTAUpdate::downloadAndInstallLittleFS() {
   
   WiFiClient* stream = httpClient.getStreamPtr();
   int downloadedBytes = 0;
+  int progressStep = contentLength / NUM_LEDS; // Progression par pixel
   
   while (httpClient.connected() && downloadedBytes < contentLength) {
     size_t size = stream->available();
@@ -175,11 +238,11 @@ bool OTAUpdate::downloadAndInstallLittleFS() {
       
       downloadedBytes += bytesRead;
       
-      // Afficher la progression
-      if (downloadedBytes % (contentLength / 10) == 0) {
-        Serial.print("Progression LittleFS: ");
-        Serial.print((downloadedBytes * 100) / contentLength);
-        Serial.println("%");
+      // Mettre à jour la barre de progression cyan
+      int currentProgressPixels = downloadedBytes / progressStep;
+      if (currentProgressPixels > progressPixels) {
+        progressPixels = currentProgressPixels;
+        showProgressBar(CRGB(0, 255, 255), progressPixels); // Cyan
       }
     }
     delay(1);
@@ -223,6 +286,7 @@ bool OTAUpdate::downloadAndInstallFirmware() {
   
   WiFiClient* stream = httpClient.getStreamPtr();
   int downloadedBytes = 0;
+  int progressStep = contentLength / NUM_LEDS; // Progression par pixel
   
   while (httpClient.connected() && downloadedBytes < contentLength) {
     size_t size = stream->available();
@@ -239,11 +303,11 @@ bool OTAUpdate::downloadAndInstallFirmware() {
       
       downloadedBytes += bytesRead;
       
-      // Afficher la progression
-      if (downloadedBytes % (contentLength / 10) == 0) {
-        Serial.print("Progression Firmware: ");
-        Serial.print((downloadedBytes * 100) / contentLength);
-        Serial.println("%");
+      // Mettre à jour la barre de progression rose
+      int currentProgressPixels = downloadedBytes / progressStep;
+      if (currentProgressPixels > progressPixels) {
+        progressPixels = currentProgressPixels;
+        showProgressBar(CRGB(255, 0, 255), progressPixels); // Rose
       }
     }
     delay(1);
