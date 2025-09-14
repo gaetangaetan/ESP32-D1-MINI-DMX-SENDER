@@ -1,7 +1,7 @@
 console.log('DEBUG: Script.js chargé - début d\'exécution');
 
 // Version du système
-const VERSION = 1757857752;
+const VERSION = 1757859520;
 console.log('Version:', VERSION);
 
 // Noms des paramètres

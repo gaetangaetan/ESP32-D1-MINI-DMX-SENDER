@@ -11,7 +11,7 @@
         
 // adresse mac de l'onirigun : 68:C6:3A:FD:37:17 (géré par le récepteur Ksoloti)        
         
-#define VERSION 1757857752 // Version basée sur timestamp Unix        
+#define VERSION 1757859520 // Version basée sur timestamp Unix        
 /*        
 // Contrôleur interactif ESP32 avec capteurs Sharp IR        
 // Utilise ESP-NOW pour transmettre les données DMX        
@@ -27,10 +27,12 @@
 #include <TM1637Display.h>        
 #include <driver/adc.h>  // Pour les constantes ADC de l'ESP32        
 #include <FastLED.h>     // Pour le ruban WS2812B        
-#include <WebServer.h>   // Pour le serveur web        
-#include <LittleFS.h>    // Pour le système de fichiers        
-#include <ArduinoJson.h> // Pour le format JSON        
-#include "ota_update.h"  // Pour la fonctionnalité OTA        
+#include <WebServer.h>   // Pour le serveur web
+#include <LittleFS.h>    // Pour le système de fichiers
+#include <ArduinoJson.h> // Pour le format JSON
+#include <WiFiManager.h> // Pour la gestion automatique du WiFi
+#include <ESPmDNS.h>     // Pour la résolution de nom mDNS
+#include "ota_update.h"  // Pour la fonctionnalité OTA
         
 #define CONTROL_TEST 0 // 1 pour tester les entrées, 0 pour le fonctionnement normal        
         
@@ -80,10 +82,10 @@ const int NUM_LEDS = 144;         // Nombre de LEDs dans le ruban (ajustable)
 // Configuration du dimmer RGB        
 #define DIMMER_SPEED 0.01 // Vitesse de l'inertie du dimmer (0.0-1.0, plus petit = plus lent)        
         
-// Configuration du serveur web        
-#define WEB_SERVER_PORT 80        
-#define AP_SSID "Ksoloti Kontrol"        
-#define AP_PASSWORD "ksoloti123"        
+// Configuration du serveur web
+#define WEB_SERVER_PORT 80
+#define MDNS_HOSTNAME "ksolotikontrol"
+#define WIFI_TIMEOUT_MS 30000  // 30 secondes de timeout pour la connexion WiFi
         
 // Structure pour un paramètre        
 typedef struct {        
@@ -145,8 +147,9 @@ ESP32Encoder encoder;
 // Objet pour la fonctionnalité OTA        
 OTAUpdate otaUpdate;        
 
-// Objets pour l'interface web        
+// Objets pour l'interface web
 WebServer webServer(WEB_SERVER_PORT);
+WiFiManager wifiManager;
         
 // Variables pour l'interface web        
 bool webModeActive = false;           // True si le preset 0 (web) est actif        
@@ -1603,14 +1606,48 @@ void setupWebInterface() {
     file = root.openNextFile();        
   }        
           
-  // Créer le point d'accès WiFi        
-  WiFi.softAP(AP_SSID, AP_PASSWORD);        
-  Serial.print("Point d'accès WiFi créé: ");        
-  Serial.println(AP_SSID);        
-  Serial.print("Mot de passe: ");        
-  Serial.println(AP_PASSWORD);        
-  Serial.print("Adresse IP: ");        
-  Serial.println(WiFi.softAPIP());        
+  // Configuration WiFiManager
+  Serial.println("Configuration WiFiManager...");
+  wifiManager.setConfigPortalTimeout(WIFI_TIMEOUT_MS / 1000); // Convertir en secondes
+  wifiManager.setAPCallback([](WiFiManager *myWiFiManager) {
+    Serial.println("Portail de configuration WiFi démarré");
+    Serial.print("SSID: ");
+    Serial.println(myWiFiManager->getConfigPortalSSID());
+    Serial.print("IP: ");
+    Serial.println(WiFi.softAPIP());
+  });
+  
+  // Tentative de connexion au WiFi
+  Serial.println("Tentative de connexion au WiFi...");
+  if (!wifiManager.autoConnect("KsolotiKontrol-Config")) {
+    Serial.println("Échec de la connexion WiFi et timeout du portail de configuration");
+    Serial.println("Redémarrage de l'ESP32...");
+    delay(3000);
+    ESP.restart();
+  }
+  
+  // Connexion WiFi réussie
+  Serial.println("Connexion WiFi établie !");
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+  Serial.print("Adresse IP: ");
+  Serial.println(WiFi.localIP());
+  Serial.print("Adresse MAC: ");
+  Serial.println(WiFi.macAddress());
+  
+  // Configuration mDNS
+  Serial.println("Configuration mDNS...");
+  if (MDNS.begin(MDNS_HOSTNAME)) {
+    Serial.print("mDNS démarré avec le nom: ");
+    Serial.print(MDNS_HOSTNAME);
+    Serial.println(".local");
+    Serial.println("Interface web accessible via: http://ksolotikontrol.local");
+  } else {
+    Serial.println("Erreur lors du démarrage mDNS");
+  }
+  
+  // Ajouter le service HTTP
+  MDNS.addService("http", "tcp", 80);
           
   // Configurer les routes du serveur web        
   setupWebRoutes();        
