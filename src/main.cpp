@@ -30,6 +30,7 @@
 #include <WebServer.h>   // Pour le serveur web        
 #include <LittleFS.h>    // Pour le système de fichiers        
 #include <ArduinoJson.h> // Pour le format JSON        
+#include "ota_update.h"  // Pour la fonctionnalité OTA        
         
 #define CONTROL_TEST 0 // 1 pour tester les entrées, 0 pour le fonctionnement normal        
         
@@ -140,9 +141,12 @@ void loadWebPresetUnified(int presetIndex);
 // Création des objets        
 TM1637Display display(TM1637_CLK_PIN, TM1637_DIO_PIN);        
 ESP32Encoder encoder;        
-        
+
+// Objet pour la fonctionnalité OTA        
+OTAUpdate otaUpdate;        
+
 // Objets pour l'interface web        
-WebServer webServer(WEB_SERVER_PORT);        
+WebServer webServer(WEB_SERVER_PORT);
         
 // Variables pour l'interface web        
 bool webModeActive = false;           // True si le preset 0 (web) est actif        
@@ -1177,12 +1181,59 @@ void updateDisplay() {
   }        
 }        
         
-void setup()        
-{        
-  Serial.begin(115200);        
-  Serial.println("=== Contrôleur Interactif ESP32 ===");        
-  Serial.println("Initialisation...");        
-          
+// === FONCTIONS DE DÉMARRAGE SÉPARÉES ===
+
+void setup_OTA() {
+  Serial.println("=== MODE OTA ACTIVÉ ===");
+  
+  // Initialiser FastLED pour l'OTA
+  FastLED.addLeds<WS2812B, LED_STRIP_PIN, GRB>(leds, NUM_LEDS);        
+  FastLED.setBrightness(BRIGHTNESS);        
+  
+  // 5 clignottements bleus pour annoncer le début
+  Serial.println("Pattern LED: 5 clignottements bleus");
+  for (int i = 0; i < 5; i++) {
+    for (int j = 0; j < NUM_LEDS; j++) {
+      leds[j] = CRGB(0, 0, 255); // Bleu
+    }
+    FastLED.show();
+    delay(200);
+    FastLED.clear();
+    FastLED.show();
+    delay(200);
+  }
+  
+  otaUpdate.beginOTA();        
+  
+  // Boucle OTA jusqu'à completion        
+  while (!otaUpdate.isOTAComplete()) {        
+    otaUpdate.updateOTA();        
+    delay(100);        
+  }        
+  
+  // 5 clignottements verts ou rouges selon le résultat
+  Serial.println("Pattern LED: 5 clignottements verts/rouges");
+  CRGB resultColor = CRGB(0, 255, 0); // Vert par défaut
+  for (int i = 0; i < 5; i++) {
+    for (int j = 0; j < NUM_LEDS; j++) {
+      leds[j] = resultColor;
+    }
+    FastLED.show();
+    delay(200);
+    FastLED.clear();
+    FastLED.show();
+    delay(200);
+  }
+  
+  // Redémarrage après OTA        
+  Serial.println("Redémarrage après mise à jour OTA...");        
+  delay(2000);
+  ESP.restart();
+}
+
+void setup_normal() {
+  Serial.println("=== MODE NORMAL ACTIVÉ ===");
+  
   // Désactiver le Bluetooth pour améliorer la stabilité des lectures analogiques        
   btStop();        
   Serial.println("Bluetooth désactivé pour optimiser les lectures ADC");        
@@ -1220,34 +1271,27 @@ void setup()
     return;        
   }        
           
-  esp_now_register_send_cb(OnDataSent);        
+  // Configuration du callback de réception        
+  // esp_now_register_recv_cb(OnDataRecv); // Pas nécessaire pour l'envoi seulement
         
+  // Configuration du callback d'envoi        
+  esp_now_register_send_cb(OnDataSent);        
           
-  // Configuration du peer récepteur ESP8266 (unicast au lieu de broadcast)        
+  // Ajout du peer (récepteur ksoloti)        
   memcpy(peerInfo.peer_addr, receiverAddress, 6);        
   peerInfo.channel = 0;        
   peerInfo.encrypt = false;        
           
   if (esp_now_add_peer(&peerInfo) != ESP_OK) {        
-    Serial.println("Erreur d'ajout du peer");        
+    Serial.println("Échec de l'ajout du peer");        
     return;        
   }        
           
-        
+  Serial.println("ESP-NOW configuré avec succès");        
           
-  Serial.println("ESP-NOW initialisé");        
-  Serial.println("Mode: Unicast vers récepteur ESP8266");        
-  Serial.print("Adresse MAC cible: ");        
-  for (int i = 0; i < 6; i++) {        
-    Serial.print(receiverAddress[i], HEX);        
-    if (i < 5) Serial.print(":");        
-  }        
-  Serial.println();        
-          
-  // Initialisation de l'interface web        
+  // Configuration du serveur web        
   setupWebInterface();        
           
-        
   Serial.println("Fréquence d'émission: " + String(EMISSION_FREQUENCY) + "Hz");        
   Serial.println("Capteurs Sharp IR sur GPIO35 et GPIO36");        
   Serial.println("Faders sur GPIO32, GPIO33, GPIO34");        
@@ -1275,7 +1319,35 @@ void setup()
   Serial.print("🎵 Octave actuelle: ");        
   Serial.println(webOctave);        
   Serial.print("📋 Preset sélectionné: P");        
-  Serial.println(selectedWebPreset);        
+  Serial.println(selectedWebPreset);
+          
+  Serial.println("=== Initialisation terminée ===");        
+  Serial.println("Le système est prêt à fonctionner");        
+}
+
+void setup()        
+{        
+  Serial.begin(115200);        
+  Serial.println("=== Contrôleur Interactif ESP32 ===");        
+  Serial.println("Initialisation...");        
+          
+  // === VÉRIFICATION DU MODE DE DÉMARRAGE ===        
+  Serial.println("Vérification du mode de démarrage...");        
+  
+  // Vérifier si le bouton 1 est pressé au démarrage
+  pinMode(22, INPUT_PULLUP); // BUTTON_1_PIN
+  delay(100); // Attendre la stabilisation
+  
+  bool buttonPressed = !digitalRead(22); // Inversé car INPUT_PULLUP
+  Serial.print("État du bouton 1 au démarrage: ");
+  Serial.println(buttonPressed ? "PRESSÉ" : "RELAXÉ");
+  
+  if (buttonPressed) {
+    setup_OTA(); // Cette fonction termine par un redémarrage
+  } else {
+    setup_normal(); // Mode normal
+  }        
+          
 }        
         
 void sendDMXvalues()        
