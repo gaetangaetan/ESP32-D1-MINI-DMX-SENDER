@@ -2,7 +2,7 @@
 
 ## Vue d'ensemble
 
-Le système ESP32 DMX SENDER a été étendu pour recevoir des triggers externes depuis l'Onirigun via ESP-NOW. Quand le bouton blanc de l'Onirigun est pressé, il déclenche la même action que le bouton 3 du contrôleur.
+Le système KSOLOTI_KONTROL_ESP32 a été étendu pour recevoir des triggers externes depuis l'Onirigun via ESP-NOW. Quand le bouton blanc de l'Onirigun est pressé, il déclenche la même action que le bouton 3 du contrôleur.
 
 ## Configuration
 
@@ -110,7 +110,7 @@ void handleExternalTrigger() {
 
 ### Vérification de la compilation
 ```bash
-cd "ESP32 D1 MINI DMX SENDER"
+cd "KSOLOTI_KONTROL_ESP32"
 pio run
 ```
 

@@ -16,6 +16,6 @@
 		}
 	],
 	"settings": {
-		"powershell.cwd": "ESP32 D1 MINI DMX SENDER"
+		"powershell.cwd": "KSOLOTI_KONTROL_ESP32"
 	}
 }

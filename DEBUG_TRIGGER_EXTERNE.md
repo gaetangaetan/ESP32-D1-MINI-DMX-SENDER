@@ -99,7 +99,7 @@ if (externalTriggerActive && (millis() - lastDebugTime > 50)) {
 
 ### 🔧 **Compilation**
 ```bash
-cd "ESP32 D1 MINI DMX SENDER"
+cd "KSOLOTI_KONTROL_ESP32"
 pio run
 ```
 ✅ **Résultat** : Compilation réussie sans erreurs
