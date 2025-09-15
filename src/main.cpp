@@ -760,30 +760,7 @@ void updateRGBWithDimmer() {
   rgb2GreenDimmed = (uint8_t)(rgb2Green * dimmerValue1);        
   rgb2BlueDimmed = (uint8_t)(rgb2Blue * dimmerValue1);        
           
-  // Debug (optionnel)        
-  static unsigned long lastDimmerDebugTime = 0;        
-  if (millis() - lastDimmerDebugTime > 2000) { // Debug toutes les 2 secondes        
-    Serial.print("🎨 RGB Debug - Mode:");        
-    Serial.print((selectedPreset == 0 && webModeActive) ? "WEB" : "PHYSIQUE");        
-    Serial.print(" | RGB1: ");        
-    Serial.print(rgb1Red); Serial.print(",");
-    Serial.print(rgb1Green); Serial.print(",");
-    Serial.print(rgb1Blue);
-    Serial.print(" | RGB2: ");        
-    Serial.print(rgb2Red); Serial.print(",");
-    Serial.print(rgb2Green); Serial.print(",");
-    Serial.print(rgb2Blue);
-    Serial.print(" | Dimmer1:");        
-    Serial.print(dimmerValue1, 2);        
-    Serial.print(" Dimmer2:");        
-    Serial.print(dimmerValue2, 2);        
-    Serial.print(" | Param[24-26]: ");
-    Serial.print(parameters[24].value); Serial.print(",");
-    Serial.print(parameters[25].value); Serial.print(",");
-    Serial.print(parameters[26].value);
-    Serial.println();        
-    lastDimmerDebugTime = millis();        
-  }        
+  // Debug RGB supprimé pour optimiser les performances
   
   // IMPORTANT: Mettre à jour le ruban LED avec les couleurs calculées
   for (int i = 0; i < NUM_LEDS; i++) {        
@@ -2208,7 +2185,16 @@ void setupWebInterfaceESP() {
 
 // Configuration des routes du serveur web
 void setupWebRoutes() {        
-  // La racine sera servie par serveStatic vers index.html        
+  // Route explicite pour la racine -> index.html
+  webServer.on("/", HTTP_GET, []() {
+    File file = LittleFS.open("/index.html", "r");
+    if (file) {
+      webServer.streamFile(file, "text/html");
+      file.close();
+    } else {
+      webServer.send(404, "text/plain", "index.html not found");
+    }
+  });
           
   // Route de test simple (pour vérifier que le serveur fonctionne)        
   webServer.on("/test", HTTP_GET, []() {        
@@ -2362,6 +2348,7 @@ void handleUpdateParameter() {
     int value = doc["value"];        
             
     if (id >= 0 && id < 27 && value >= 0 && value <= 255) {        
+      // Debug: Paramètre ID" + String(id) + " mis à jour
       parameters[id].value = value;        
       dmxValues[parameters[id].dmxChannel - 1] = value;        
               
@@ -2495,6 +2482,7 @@ void handleLoadWebPreset() {
             
     // Vérifier que le slot existe et contient des données (on ignore webPresetCount)       
     if (id >= 0 && id < MAX_WEB_PRESETS && strlen(webPresets[id].name) > 0) {        
+      // Debug: Chargement preset P" + String(id + 1)
       // Appliquer les valeurs du preset        
       for (int i = 0; i < 27; i++) {        
         parameters[i].value = webPresets[id].values[i];        

@@ -1,8 +1,8 @@
-console.log('DEBUG: Script.js chargé - début d\'exécution');
+// Script chargé
 
 // Version du système
 const VERSION = 1757941027;
-console.log('Version:', VERSION);
+// Version: " + VERSION
 
 // Noms des paramètres
 const paramNames = [
@@ -737,6 +737,26 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Gestion des boutons d'export/import
   setupBackupButtons();
+  
+  // === EVENT LISTENERS DE DEBUG ===
+  // Bouton toggle debug
+  const debugToggle = document.getElementById('debug-toggle');
+  if (debugToggle) {
+    debugToggle.addEventListener('click', toggleDebugPanel);
+    console.log('DEBUG: Event listener debug attaché avec succès');
+  }
+  
+  // Bouton actualiser debug
+  const debugRefresh = document.getElementById('debug-refresh');
+  if (debugRefresh) {
+    debugRefresh.addEventListener('click', loadDebugMessages);
+  }
+  
+  // Bouton effacer debug
+  const debugClear = document.getElementById('debug-clear');
+  if (debugClear) {
+    debugClear.addEventListener('click', clearDebugMessages);
+  }
 });
 
 // Fonction pour changer la waveform (0-6)
@@ -992,23 +1012,4 @@ function importPresets(file) {
   
   // Réinitialiser l'input file
   document.getElementById('import-file').value = '';
-  
-  // === EVENT LISTENERS DE DEBUG ===
-  // Bouton toggle debug
-  const debugToggle = document.getElementById('debug-toggle');
-  if (debugToggle) {
-    debugToggle.addEventListener('click', toggleDebugPanel);
-  }
-  
-  // Bouton actualiser debug
-  const debugRefresh = document.getElementById('debug-refresh');
-  if (debugRefresh) {
-    debugRefresh.addEventListener('click', loadDebugMessages);
-  }
-  
-  // Bouton effacer debug
-  const debugClear = document.getElementById('debug-clear');
-  if (debugClear) {
-    debugClear.addEventListener('click', clearDebugMessages);
-  }
 };
