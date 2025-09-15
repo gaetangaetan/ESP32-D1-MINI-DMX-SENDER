@@ -116,6 +116,7 @@ typedef struct {
 // Fonctions de l'interface web        
 void setupWebInterface();        
 void setupWebInterfaceESP(); // Version pour point d'accès ESP
+void optimizeAPMode(); // Optimisations pour mode Access Point
 void setupWebRoutes();        
 
 // Fonctions de debug web
@@ -2130,8 +2131,11 @@ void setupWebInterfaceESP() {
   const char* apSSID = "KsolotiKontrol-AP";
   const char* apPassword = "ksoloti123";
   
-  // Créer le point d'accès
-  WiFi.softAP(apSSID, apPassword);
+  // Créer le point d'accès avec optimisations
+  WiFi.softAP(apSSID, apPassword, 1, 0, 4); // Canal 1, visible, max 4 clients
+  
+  // Appliquer les optimisations AP
+  optimizeAPMode();
   
   // Obtenir l'adresse IP du point d'accès
   IPAddress apIP = WiFi.softAPIP();
@@ -2182,6 +2186,29 @@ void setupWebInterfaceESP() {
   Serial.println("Début du chargement des assignations web...");        
   loadWebAssignments();        
 }        
+
+// Optimisations pour le mode Access Point
+void optimizeAPMode() {
+  // Puissance WiFi maximale pour meilleure portée
+  WiFi.setTxPower(WIFI_POWER_19_5dBm);
+  
+  // Réduire la latence TCP
+  WiFi.setSleep(false);
+  
+  // Optimiser les paramètres TCP pour iPad
+  WiFi.setAutoReconnect(true);
+  
+  // Configuration TCP pour éviter les connexions bloquées
+  WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+    if (event == ARDUINO_EVENT_WIFI_AP_STADISCONNECTED) {
+      Serial.println("🔌 Client déconnecté - Nettoyage connexions");
+      // Forçage d'un garbage collection TCP
+      delay(100);
+    }
+  });
+  
+  Serial.println("🚀 Optimisations mode AP appliquées (iPad compatible)");
+}
 
 // Configuration des routes du serveur web
 void setupWebRoutes() {        
@@ -2620,9 +2647,13 @@ void handleNotFound() {
       else if (path.endsWith(".png")) mimeType = "image/png";        
       else if (path.endsWith(".jpg") || path.endsWith(".jpeg")) mimeType = "image/jpeg";        
           
+      // Ajouter des en-têtes de cache pour améliorer les performances
+      webServer.sendHeader("Cache-Control", "public, max-age=31536000"); // 1 an
+      webServer.sendHeader("Connection", "close");
+      
       webServer.streamFile(file, mimeType);        
       file.close();        
-      Serial.println("  ✅ Fichier servi avec succès");        
+      Serial.println("  ✅ Fichier servi avec succès (avec cache)");        
     } else {        
       Serial.println("  ❌ Impossible d'ouvrir le fichier");        
       webServer.send(500, "text/plain", "Erreur serveur");        

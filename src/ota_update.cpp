@@ -262,6 +262,9 @@ bool OTAUpdate::downloadAndInstallLittleFS() {
 
 bool OTAUpdate::downloadAndInstallFirmware() {
   Serial.println("Téléchargement Firmware...");
+  progressPixels = 0; // CRITICAL FIX: Reset progress for firmware
+  Serial.print("Progression firmware réinitialisée à: ");
+  Serial.println(progressPixels);
   
   httpClient.begin(wifiClient, OTA_FIRMWARE_URL);
   int httpCode = httpClient.GET();
