@@ -1,7 +1,7 @@
 // Script chargé
 
 // Version du système
-const VERSION = 1757941027;
+const VERSION = 1757978703;
 // Version: " + VERSION
 
 // Noms des paramètres

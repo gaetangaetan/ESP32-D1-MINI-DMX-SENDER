@@ -11,7 +11,7 @@
         
 // adresse mac de l'onirigun : 68:C6:3A:FD:37:17 (géré par le récepteur Ksoloti)        
         
-#define VERSION 1757941027 // Version basée sur timestamp Unix        
+#define VERSION 1757978703 // Version basée sur timestamp Unix        
 /*        
 // Contrôleur interactif ESP32 avec capteurs Sharp IR        
 // Utilise ESP-NOW pour transmettre les données DMX        

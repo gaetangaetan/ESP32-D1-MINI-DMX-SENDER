@@ -1,8 +1,20 @@
-# Fonctionnalité OTA (Over-The-Air Update)
+# Fonctionnalité OTA (Over-The-Air Update) v1757978703
 
 ## Description
 
-Cette fonctionnalité permet de mettre à jour le firmware et le système de fichiers LittleFS de l'ESP32 via WiFi, sans avoir besoin de connexion physique.
+Système de mise à jour sans fil intégré avec progression visuelle LED temps réel. Met à jour automatiquement le firmware ESP32 et le système de fichiers LittleFS contenant l'interface web.
+
+## Améliorations v1757978703
+
+### ✅ Progression Visuelle Complète
+- **Barre de progression firmware** corrigée (couleur rose)
+- **Segments LED** par incréments de 5 pixels
+- **Feedback immédiat** pour chaque étape
+
+### ✅ Optimisations
+- **Réinitialisation** des compteurs de progression
+- **Gestion d'erreurs** améliorée
+- **Stabilité** des connexions TCP
 
 ## Fonctionnement
 

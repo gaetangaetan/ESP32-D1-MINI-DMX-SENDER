@@ -240,10 +240,12 @@
     <!-- Navigation flottante -->
     <div class="nav-float">
         <h3>Navigation</h3>
+        <a href="#modes">Modes de Fonctionnement</a>
         <a href="#connexion">Connexion</a>
         <a href="#interface">Interface Web</a>
         <a href="#presets">Presets</a>
         <a href="#assignations">Assignations</a>
+        <a href="#ota">Mises à Jour OTA</a>
         <a href="#boitier">Contrôles Physiques</a>
         <a href="#specifications">Spécifications</a>
     </div>
@@ -251,20 +253,93 @@
     <div class="main-container">
         <header>
             <h1>🎵 Ksoloti Kontrol</h1>
-            <div class="subtitle">Manuel d'utilisation - Version 028</div>
+            <div class="subtitle">Manuel d'utilisation - Version 1757978703</div>
         </header>
 
-        <a href="/" class="back-button">← Retour à l'interface</a>
+        <section class="section" id="modes">
+            <h2>🔄 Modes de Fonctionnement</h2>
+            
+            <p>Le Ksoloti Kontrol dispose de <strong>4 modes</strong> sélectionnables au démarrage :</p>
+            
+            <h3>Mode Sélection (Démarrage)</h3>
+            <ol>
+                <li><strong>Bouton 1 enfoncé</strong> → Mode OTA (mise à jour)</li>
+                <li><strong>Bouton 2 maintenu :</strong>
+                    <ul>
+                        <li>Relâché après clignotement rose → <strong>Mode Standalone</strong></li>
+                        <li>Relâché après clignotement cyan → <strong>Mode WiFi Local</strong></li>
+                        <li>Maintenu après clignotement jaune → <strong>Mode WiFi AP</strong></li>
+                    </ul>
+                </li>
+                <li><strong>Aucun bouton</strong> → Mode Standalone (par défaut)</li>
+            </ol>
+
+            <h3>🎧 Mode 1 : Standalone</h3>
+            <ul>
+                <li><strong>WiFi :</strong> Désactivé</li>
+                <li><strong>Interface web :</strong> Aucune</li>
+                <li><strong>Performance :</strong> Maximale</li>
+                <li><strong>Usage :</strong> Contrôle physique uniquement</li>
+                <li><strong>LED :</strong> Clignotement rose (1s)</li>
+            </ul>
+
+            <h3>🌐 Mode 2 : WiFi Local</h3>
+            <ul>
+                <li><strong>WiFi :</strong> Connexion au réseau local</li>
+                <li><strong>Interface web :</strong> Accessible via <span class="code">ksolotikontrol.local</span></li>
+                <li><strong>Configuration :</strong> WiFiManager si réseau indisponible</li>
+                <li><strong>Performance :</strong> Excellente</li>
+                <li><strong>LED :</strong> Clignotement cyan (2s)</li>
+            </ul>
+
+            <h3>📶 Mode 3 : WiFi Access Point</h3>
+            <ul>
+                <li><strong>WiFi :</strong> Point d'accès "KsolotiKontrol-AP"</li>
+                <li><strong>Interface web :</strong> <span class="code">192.168.4.1</span></li>
+                <li><strong>Mot de passe :</strong> <span class="code">ksoloti123</span></li>
+                <li><strong>Note :</strong> Premier chargement peut nécessiter déconnexion/reconnexion</li>
+                <li><strong>LED :</strong> Clignotement jaune (2s)</li>
+            </ul>
+
+            <h3>🔄 Mode 4 : OTA (Mise à jour)</h3>
+            <ul>
+                <li><strong>Activation :</strong> Bouton 1 enfoncé au démarrage</li>
+                <li><strong>Fonctionnalité :</strong> Mise à jour sans fil</li>
+                <li><strong>LED :</strong> Progression colorée (voir section OTA)</li>
+            </ul>
+
+            <div class="alert alert-info">
+                <strong>💡 Recommandation :</strong> Utilisez le Mode WiFi Local pour une expérience optimale.
+            </div>
+        </section>
 
         <section class="section" id="connexion">
             <h2>🔗 Connexion</h2>
             
-            <h3>1. Connexion WiFi</h3>
+            <h3>Mode WiFi Local (Recommandé)</h3>
             <ol>
-                <li>Allumez le boîtier Ksoloti Kontrol</li>
-                <li>Recherchez le réseau WiFi <strong>"Ksoloti Kontrol"</strong></li>
+                <li>Démarrez en <strong>Mode WiFi Local</strong> (bouton 2 bref)</li>
+                <li>L'ESP32 se connecte automatiquement au dernier réseau</li>
+                <li>Accédez à : <span class="code">http://ksolotikontrol.local</span></li>
+                <li>Si le réseau a changé, utilisez le bouton "🔄 Changer WiFi"</li>
+            </ol>
+
+            <h3>Mode Access Point</h3>
+            <ol>
+                <li>Démarrez en <strong>Mode WiFi AP</strong> (bouton 2 long)</li>
+                <li>Recherchez le réseau WiFi <strong>"KsolotiKontrol-AP"</strong></li>
                 <li>Connectez-vous avec le mot de passe : <span class="code">ksoloti123</span></li>
-                <li>Ouvrez votre navigateur et allez à l'adresse : <span class="code">192.168.4.1</span></li>
+                <li>Ouvrez : <span class="code">http://192.168.4.1</span></li>
+                <li><strong>Note :</strong> Si la page ne charge pas, déconnectez/reconnectez le WiFi</li>
+            </ol>
+
+            <h3>Changement de Réseau WiFi</h3>
+            <ol>
+                <li>En mode WiFi Local, cliquez sur "🔄 Changer WiFi"</li>
+                <li>Confirmez l'action</li>
+                <li>Connectez-vous au réseau "KsolotiKontrol-Config"</li>
+                <li>Sélectionnez votre nouveau réseau WiFi</li>
+                <li>L'ESP32 redémarre avec la nouvelle configuration</li>
             </ol>
 
             <div class="alert alert-info">
@@ -275,11 +350,27 @@
         <section class="section" id="interface">
             <h2>🖥️ Interface Web</h2>
             
+            <h3>En-tête de l'Interface</h3>
+            <ul>
+                <li><strong>💾 Save to File :</strong> Exporter tous les presets vers un fichier JSON</li>
+                <li><strong>📁 Load from File :</strong> Importer des presets depuis un fichier JSON</li>
+                <li><strong>🔄 Changer WiFi :</strong> Reconfigurer la connexion WiFi (mode local uniquement)</li>
+                <li><strong>🐛 Debug :</strong> Console de debug ESP32 en temps réel</li>
+            </ul>
+
             <h3>État Actuel & Couleur</h3>
             <ul>
                 <li><strong>Octave :</strong> Boutons OCT- / OCT+ pour transposer (-12 à +12)</li>
                 <li><strong>Preset actuel :</strong> Affichage du preset chargé (P1 à P8)</li>
                 <li><strong>Couleur :</strong> Sélecteur de couleur pour le ruban LED</li>
+            </ul>
+
+            <h3>Console de Debug</h3>
+            <ul>
+                <li><strong>Activation :</strong> Cliquez sur "🐛 Debug"</li>
+                <li><strong>Contenu :</strong> Messages ESP32 avec timestamps</li>
+                <li><strong>Rafraîchissement :</strong> Automatique toutes les 2 secondes</li>
+                <li><strong>Boutons :</strong> Actualiser, Effacer</li>
             </ul>
 
             <h3>Paramètres Live</h3>
@@ -394,6 +485,75 @@
             </div>
         </section>
 
+        <section class="section" id="ota">
+            <h2>🔄 Mises à Jour OTA (Over-The-Air)</h2>
+            
+            <h3>Activation du Mode OTA</h3>
+            <ol>
+                <li><strong>Au démarrage :</strong> Maintenez le Bouton 1 enfoncé</li>
+                <li><strong>LED :</strong> 5 clignotements bleus pour confirmer</li>
+                <li><strong>WiFi :</strong> Connexion automatique au réseau "mrVOOlpy"</li>
+            </ol>
+
+            <h3>Progression Visuelle</h3>
+            <table>
+                <tr>
+                    <th>Étape</th>
+                    <th>Couleur LED</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td>Initialisation</td>
+                    <td style="color: #00bfff;">Bleu</td>
+                    <td>5 clignotements de démarrage</td>
+                </tr>
+                <tr>
+                    <td>Connexion WiFi</td>
+                    <td style="color: #ffff00;">Jaune</td>
+                    <td>Barre de progression</td>
+                </tr>
+                <tr>
+                    <td>Téléchargement LittleFS</td>
+                    <td style="color: #00ffff;">Cyan</td>
+                    <td>Progression par segments de 5 pixels</td>
+                </tr>
+                <tr>
+                    <td>Téléchargement Firmware</td>
+                    <td style="color: #ff00ff;">Rose</td>
+                    <td>Progression par segments de 5 pixels</td>
+                </tr>
+                <tr>
+                    <td>Succès</td>
+                    <td style="color: #00ff00;">Vert</td>
+                    <td>5 clignotements + redémarrage</td>
+                </tr>
+                <tr>
+                    <td>Échec</td>
+                    <td style="color: #ff0000;">Rouge</td>
+                    <td>5 clignotements + redémarrage</td>
+                </tr>
+            </table>
+
+            <h3>Sources des Mises à Jour</h3>
+            <ul>
+                <li><strong>LittleFS :</strong> <span class="code">http://ksoloti_kontrol.gaetanstreel.com/littlefs.bin</span></li>
+                <li><strong>Firmware :</strong> <span class="code">http://ksoloti_kontrol.gaetanstreel.com/firmware.bin</span></li>
+                <li><strong>Réseau :</strong> mrVOOlpy (youhououhou)</li>
+            </ul>
+
+            <h3>Fonctionnalités Mises à Jour</h3>
+            <ul>
+                <li>✅ <strong>Interface web</strong> (HTML/CSS/JS)</li>
+                <li>✅ <strong>Firmware ESP32</strong> (fonctionnalités + corrections)</li>
+                <li>✅ <strong>Progression visuelle</strong> en temps réel</li>
+                <li>✅ <strong>Redémarrage automatique</strong> après mise à jour</li>
+            </ul>
+
+            <div class="alert alert-warning">
+                <strong>⚠️ Important :</strong> Ne pas éteindre l'ESP32 pendant une mise à jour OTA !
+            </div>
+        </section>
+
         <section class="section" id="boitier">
             <h2>🎛️ Contrôles Physiques</h2>
             
@@ -469,6 +629,14 @@
                 <li><strong>Persistance :</strong> Sauvegarde automatique</li>
             </ul>
 
+            <h3>Modes de Fonctionnement</h3>
+            <ul>
+                <li><strong>Mode Standalone :</strong> Performance maximale, contrôles physiques uniquement</li>
+                <li><strong>Mode WiFi Local :</strong> Connexion réseau local + mDNS (ksolotikontrol.local)</li>
+                <li><strong>Mode WiFi AP :</strong> Point d'accès intégré (192.168.4.1)</li>
+                <li><strong>Mode OTA :</strong> Mise à jour sans fil avec progression LED</li>
+            </ul>
+
             <h3>Fonctionnalités</h3>
             <ul>
                 <li>✅ 8 presets web sauvegardables</li>
@@ -478,6 +646,11 @@
                 <li>✅ Transposition d'octave (-12 à +12)</li>
                 <li>✅ Interface responsive (mobile/tablette)</li>
                 <li>✅ Synchronisation boîtier ↔ web</li>
+                <li>✅ <strong>Mises à jour OTA</strong> avec progression visuelle</li>
+                <li>✅ <strong>Console debug web</strong> temps réel</li>
+                <li>✅ <strong>Export/Import presets</strong> vers fichiers JSON</li>
+                <li>✅ <strong>Changement WiFi</strong> depuis l'interface web</li>
+                <li>✅ <strong>Optimisations TCP</strong> pour mode Access Point</li>
             </ul>
         </section>
 
@@ -486,8 +659,9 @@
         </div>
 
         <footer style="text-align: center; color: var(--text-color-secondary); margin-top: 40px; padding: 20px;">
-            <p>Ksoloti Kontrol v028 - Documentation générée automatiquement</p>
+            <p>Ksoloti Kontrol v1757978703 - Documentation mise à jour</p>
             <p>Système de contrôle avancé pour synthétiseur Ksoloti</p>
+            <p><em>Fonctionnalités : 4 modes WiFi, OTA, Debug web, Export/Import presets</em></p>
         </footer>
     </div>
 

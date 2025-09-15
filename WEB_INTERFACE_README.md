@@ -1,8 +1,38 @@
-# Interface Web du Contrôleur DMX
+# Interface Web Ksoloti Kontrol v1757978703
 
 ## Vue d'ensemble
 
-L'interface web permet de contrôler les paramètres audio du theremin en temps réel via un navigateur web, sans avoir besoin de modifier et recompiler le firmware. Elle est accessible quand le preset 0 est sélectionné sur l'encodeur rotatif.
+L'interface web permet de contrôler les paramètres audio du Ksoloti en temps réel via un navigateur web. Disponible en 3 modes WiFi avec fonctionnalités avancées : debug temps réel, export/import presets, et changement de réseau WiFi.
+
+## Modes d'Accès
+
+### Mode WiFi Local (Recommandé)
+- **Accès :** `http://ksolotikontrol.local`
+- **Avantages :** Performance optimale, accès depuis votre réseau
+- **Configuration :** WiFiManager automatique
+
+### Mode Access Point
+- **Réseau :** KsolotiKontrol-AP (mot de passe : ksoloti123)
+- **Accès :** `http://192.168.4.1`
+- **Note :** Premier chargement peut nécessiter déconnexion/reconnexion
+
+### Mode Standalone
+- **Interface web :** Désactivée
+- **Performance :** Maximale pour contrôles physiques uniquement
+
+## Nouvelles Fonctionnalités v1757978703
+
+### 🔄 Boutons d'Action (En-tête)
+- **💾 Save to File :** Export de tous les presets vers JSON
+- **📁 Load from File :** Import de presets depuis JSON
+- **🔄 Changer WiFi :** Reconfiguration WiFi (mode local uniquement)
+- **🐛 Debug :** Console debug ESP32 temps réel
+
+### 🐛 Console Debug
+- **Messages ESP32 :** Affichage avec timestamps
+- **Rafraîchissement :** Automatique (2s) + manuel
+- **Contrôles :** Actualiser, Effacer
+- **Usage :** Débogage en temps réel sans câble série
 
 ## Fonctionnalités
 
