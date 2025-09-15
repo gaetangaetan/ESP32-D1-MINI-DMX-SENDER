@@ -1643,7 +1643,8 @@ void setup_wifi_esp() {
   Serial.print("🎵 Octave actuelle: ");        
   Serial.println(webOctave);        
   Serial.print("📋 Preset sélectionné: P");        
-  Serial.println(selectedWebPreset);        
+  Serial.println(selectedWebPreset);      
+    
           
   // IMPORTANT: Charger le preset P1 par défaut au démarrage
   loadWebPresetUnified(0); // Charger P1 (index 0)
