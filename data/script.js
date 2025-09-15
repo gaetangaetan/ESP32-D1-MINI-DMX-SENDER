@@ -757,6 +757,28 @@ document.addEventListener('DOMContentLoaded', function() {
   if (debugClear) {
     debugClear.addEventListener('click', clearDebugMessages);
   }
+  
+  // === BOUTON CHANGER WIFI ===
+  const changeWifiBtn = document.getElementById('change-wifi');
+  if (changeWifiBtn) {
+    changeWifiBtn.addEventListener('click', function() {
+      if (confirm('🔄 Changer le réseau WiFi ?\n\nCela va ouvrir le portail de configuration WiFi.')) {
+        fetch('/api/change-wifi', { method: 'POST' })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              alert('✅ Portail WiFi lancé !\n\nConnectez-vous au réseau "KsolotiKontrol-Config" pour choisir un nouveau réseau.');
+            } else {
+              alert('❌ Erreur: ' + data.message);
+            }
+          })
+          .catch(error => {
+            console.error('Erreur:', error);
+            alert('❌ Erreur de communication');
+          });
+      }
+    });
+  }
 });
 
 // Fonction pour changer la waveform (0-6)

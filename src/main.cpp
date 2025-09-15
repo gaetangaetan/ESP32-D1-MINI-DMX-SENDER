@@ -133,6 +133,7 @@ void handleListWebPresets();
 void handleOctave();        
 void handleExportPresets();
 void handleImportPresets();
+void handleChangeWifi(); // Fonction pour changer le réseau WiFi
 void initializeEmptyWebPresets();
 void handleNotFound();        
 void saveWebPresets();        
@@ -2275,6 +2276,9 @@ void setupWebRoutes() {
   
   // API pour récupérer les messages de debug
   webServer.on("/api/debug", HTTP_GET, handleGetDebugMessages);
+  
+  // API pour changer le réseau WiFi
+  webServer.on("/api/change-wifi", HTTP_POST, handleChangeWifi);
           
   // API pour vérifier les changements physiques - DÉSACTIVÉ (trop lourd)       
   // webServer.on("/api/status", HTTP_GET, handleGetStatus);        
@@ -2322,6 +2326,36 @@ void handleGetDebugMessages() {
   serializeJson(doc, response);
   webServer.send(200, "application/json", response);
 }        
+
+// API: Changer le réseau WiFi
+void handleChangeWifi() {
+  // Vérifier qu'on est en mode WiFi local (pas en mode AP)
+  if (currentOperatingMode != MODE_WIFI_LOCAL) {
+    DynamicJsonDocument response(128);
+    response["success"] = false;
+    response["message"] = "Changement WiFi disponible uniquement en mode WiFi local";
+    
+    String jsonResponse;
+    serializeJson(response, jsonResponse);
+    webServer.send(400, "application/json", jsonResponse);
+    return;
+  }
+  
+  // Démarrer le portail de configuration WiFi
+  Serial.println("🔄 Démarrage du portail de configuration WiFi...");
+  
+  DynamicJsonDocument response(128);
+  response["success"] = true;
+  response["message"] = "Portail WiFi lancé";
+  
+  String jsonResponse;
+  serializeJson(response, jsonResponse);
+  webServer.send(200, "application/json", jsonResponse);
+  
+  // Démarrer le portail de configuration (non-bloquant)
+  delay(100); // Laisser le temps à la réponse d'être envoyée
+  wifiManager.startConfigPortal("KsolotiKontrol-Config");
+}
         
 // API: Récupérer le statut système        
 void handleGetStatus() {        

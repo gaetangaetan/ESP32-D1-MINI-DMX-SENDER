@@ -762,6 +762,15 @@ header h1 {
   word-wrap: break-word;
 }
 
+.wifi-btn {
+  background: #74b9ff !important;
+  color: white !important;
+}
+
+.wifi-btn:hover {
+  background: #0984e3 !important;
+}
+
 .debug-btn {
   background: #ff6b6b !important;
   color: white !important;
