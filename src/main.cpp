@@ -2568,20 +2568,6 @@ void handleNotFound() {
     webServer.send(404, "text/plain", "Fichier non trouvé");        
   }        
 }        
-          
-  String response = "Page non trouvée: " + path;        
-  response += "\n\nFichiers disponibles:\n";        
-          
-  // Lister les fichiers disponibles        
-  File root = LittleFS.open("/");        
-  File file = root.openNextFile();        
-  while (file) {        
-    response += "- " + String(file.name()) + "\n";        
-    file = root.openNextFile();        
-  }        
-          
-  webServer.send(404, "text/plain", response);        
-}        
         
         
         
