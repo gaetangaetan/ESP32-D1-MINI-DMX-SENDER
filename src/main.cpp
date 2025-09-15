@@ -762,22 +762,34 @@ void updateRGBWithDimmer() {
           
   // Debug (optionnel)        
   static unsigned long lastDimmerDebugTime = 0;        
-  // if (millis() - lastDimmerDebugTime > 2000) { // Debug toutes les 2 secondes        
-  //   Serial.print("Dimmer - S1:");        
-  //   Serial.print(dimmer1Source);        
-  //   Serial.print(" S2:");        
-  //   Serial.print(dimmer2Source);        
-  //   Serial.print(" V1:");        
-  //   Serial.print(control1Value);        
-  //   Serial.print(" V2:");        
-  //   Serial.print(control2Value);        
-  //   Serial.print(" D1:");        
-  //   Serial.print(dimmerValue1, 2);        
-  //   Serial.print(" D2:");        
-  //   Serial.print(dimmerValue2, 2);        
-  //   Serial.println();        
-  //   lastDimmerDebugTime = millis();        
-  // }        
+  if (millis() - lastDimmerDebugTime > 2000) { // Debug toutes les 2 secondes        
+    Serial.print("🎨 RGB Debug - Mode:");        
+    Serial.print((selectedPreset == 0 && webModeActive) ? "WEB" : "PHYSIQUE");        
+    Serial.print(" | RGB1: ");        
+    Serial.print(rgb1Red); Serial.print(",");
+    Serial.print(rgb1Green); Serial.print(",");
+    Serial.print(rgb1Blue);
+    Serial.print(" | RGB2: ");        
+    Serial.print(rgb2Red); Serial.print(",");
+    Serial.print(rgb2Green); Serial.print(",");
+    Serial.print(rgb2Blue);
+    Serial.print(" | Dimmer1:");        
+    Serial.print(dimmerValue1, 2);        
+    Serial.print(" Dimmer2:");        
+    Serial.print(dimmerValue2, 2);        
+    Serial.print(" | Param[24-26]: ");
+    Serial.print(parameters[24].value); Serial.print(",");
+    Serial.print(parameters[25].value); Serial.print(",");
+    Serial.print(parameters[26].value);
+    Serial.println();        
+    lastDimmerDebugTime = millis();        
+  }        
+  
+  // IMPORTANT: Mettre à jour le ruban LED avec les couleurs calculées
+  for (int i = 0; i < NUM_LEDS; i++) {        
+    leds[i] = CRGB(rgb2RedDimmed, rgb2GreenDimmed, rgb2BlueDimmed);        
+  }        
+  FastLED.show();        
 }        
         
         
@@ -1328,21 +1340,6 @@ void setup_normal() {
   Serial.println("Transposition actuelle: " + String(transpose) + " (├ù" + String(transpose_factor) + ")");        
   Serial.println("Transposition appliquée au pitch et gate_threshold");        
   Serial.println("================================");        
-          
-  // Initialiser le système unifié des presets web        
-  webModeActive = true;        
-  selectedPreset = 0; // Toujours en mode web        
-  selectedWebPreset = 1; // Commencer avec P1 sélectionné        
-  displayUnified(); // Afficher l'état initial        
-          
-  Serial.println("🎯 Système unifié activé - Utilisation exclusive des web presets");        
-  Serial.print("🎵 Octave actuelle: ");        
-  Serial.println(webOctave);        
-  Serial.print("📋 Preset sélectionné: P");        
-  Serial.println(selectedWebPreset);
-          
-  Serial.println("=== Initialisation terminée ===");        
-  Serial.println("Le système est prêt à fonctionner");        
 }
 
 // === MODE STANDALONE (SANS INTERFACE WEB) ===
@@ -1404,6 +1401,56 @@ void setup_standalone() {
           
   // Initialiser l'interface utilisateur        
   initializeUserInterface();        
+          
+  // Initialiser le système unifié des presets web        
+  webModeActive = true;        
+  selectedPreset = 0; // Toujours en mode web        
+  selectedWebPreset = 1; // Commencer avec P1 sélectionné        
+  displayUnified(); // Afficher l'état initial        
+          
+  Serial.println("🎯 Système unifié activé - Utilisation exclusive des web presets");        
+  Serial.print("🎵 Octave actuelle: ");        
+  Serial.println(webOctave);        
+  Serial.print("📋 Preset sélectionné: P");        
+  Serial.println(selectedWebPreset);        
+          
+  // IMPORTANT: Charger le preset P1 par défaut au démarrage
+  loadWebPresetUnified(0); // Charger P1 (index 0)
+  Serial.println("🚀 Preset P1 chargé par défaut");
+          
+  // Initialiser LittleFS pour charger les presets web (même en mode standalone)
+  Serial.println("Initialisation de LittleFS...");        
+  if (!LittleFS.begin(true)) {        
+    Serial.println("Première tentative échouée, formatage forcé...");        
+    LittleFS.format();        
+    if (!LittleFS.begin(true)) {        
+      Serial.println("Erreur: Impossible d'initialiser LittleFS même après formatage");        
+      // Initialiser des presets par défaut si LittleFS échoue
+      initializeEmptyWebPresets();
+    } else {
+      Serial.println("LittleFS initialisé avec succès");        
+      // Charger les presets web existants
+      loadWebPresets();
+      // Initialiser des presets vides si aucun preset n'existe
+      if (webPresetCount == 0) {
+        Serial.println("Aucun preset trouvé - Initialisation des presets vides...");
+        initializeEmptyWebPresets();
+      }
+    }        
+  } else {
+    Serial.println("LittleFS initialisé avec succès");        
+    // Charger les presets web existants
+    loadWebPresets();
+    // Initialiser des presets vides si aucun preset n'existe
+    if (webPresetCount == 0) {
+      Serial.println("Aucun preset trouvé - Initialisation des presets vides...");
+      initializeEmptyWebPresets();
+    }
+  }
+  
+  // Maintenant recharger le preset P1 (il devrait exister)
+  loadWebPresetUnified(0); // Charger P1 (index 0)
+  Serial.println("🚀 Preset P1 rechargé après initialisation LittleFS");
           
   // Indicateur LED déjà géré dans setup()
           
@@ -1487,7 +1534,21 @@ void setup_wifi_local() {
   // Initialiser l'interface utilisateur        
   initializeUserInterface();        
           
-  // Indicateur LED déjà géré dans setup()
+  // Initialiser le système unifié des presets web        
+  webModeActive = true;        
+  selectedPreset = 0; // Toujours en mode web        
+  selectedWebPreset = 1; // Commencer avec P1 sélectionné        
+  displayUnified(); // Afficher l'état initial        
+          
+  Serial.println("🎯 Système unifié activé - Utilisation exclusive des web presets");        
+  Serial.print("🎵 Octave actuelle: ");        
+  Serial.println(webOctave);        
+  Serial.print("📋 Preset sélectionné: P");        
+  Serial.println(selectedWebPreset);        
+          
+  // IMPORTANT: Charger le preset P1 par défaut au démarrage
+  loadWebPresetUnified(0); // Charger P1 (index 0)
+  Serial.println("🚀 Preset P1 chargé par défaut");
           
   // Configuration du serveur web (WiFi Local)        
   setupWebInterface();        
@@ -1572,7 +1633,21 @@ void setup_wifi_esp() {
   // Initialiser l'interface utilisateur        
   initializeUserInterface();        
           
-  // Indicateur LED déjà géré dans setup()
+  // Initialiser le système unifié des presets web        
+  webModeActive = true;        
+  selectedPreset = 0; // Toujours en mode web        
+  selectedWebPreset = 1; // Commencer avec P1 sélectionné        
+  displayUnified(); // Afficher l'état initial        
+          
+  Serial.println("🎯 Système unifié activé - Utilisation exclusive des web presets");        
+  Serial.print("🎵 Octave actuelle: ");        
+  Serial.println(webOctave);        
+  Serial.print("📋 Preset sélectionné: P");        
+  Serial.println(selectedWebPreset);        
+          
+  // IMPORTANT: Charger le preset P1 par défaut au démarrage
+  loadWebPresetUnified(0); // Charger P1 (index 0)
+  Serial.println("🚀 Preset P1 chargé par défaut");
           
   // Configuration du serveur web (WiFi ESP - Point d'accès)        
   setupWebInterfaceESP();        
