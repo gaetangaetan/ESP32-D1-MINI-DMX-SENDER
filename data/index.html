@@ -3,21 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ksoloti Kontrol v1757859520</title>
+    <title>Ksoloti Kontrol v1757941027</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="main-container">
         <header>
             <div class="header-content">
-                <h1>Ksoloti Kontrol v1757859520</h1>
+                <h1>Ksoloti Kontrol v1757941027</h1>
                 <div class="backup-controls">
                     <button id="export-presets" class="backup-btn export-btn">💾 Save to File</button>
                     <button id="import-presets" class="backup-btn import-btn">📁 Load from File</button>
+                    <button id="debug-toggle" class="backup-btn debug-btn">🐛 Debug</button>
                     <input type="file" id="import-file" accept=".json" style="display: none;">
                 </div>
             </div>
         </header>
+
+        <!-- Zone de debug (masquée par défaut) -->
+        <div id="debug-panel" class="debug-panel" style="display: none;">
+            <div class="debug-header">
+                <h3>🐛 Messages de Debug</h3>
+                <button id="debug-clear" class="btn btn-small">Effacer</button>
+                <button id="debug-refresh" class="btn btn-small">Actualiser</button>
+            </div>
+            <div id="debug-messages" class="debug-messages">
+                <p>Chargement des messages de debug...</p>
+            </div>
+        </div>
 
         <!-- Interface unifiée -->
         <div class="main-content">

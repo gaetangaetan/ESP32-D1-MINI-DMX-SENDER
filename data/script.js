@@ -1,7 +1,7 @@
 console.log('DEBUG: Script.js chargé - début d\'exécution');
 
 // Version du système
-const VERSION = 1757859520;
+const VERSION = 1757941027;
 console.log('Version:', VERSION);
 
 // Noms des paramètres
@@ -50,6 +50,25 @@ function updateParameter(paramId, value) {
     }
   })
   .catch(e => showStatus('❌ Erreur de connexion'));
+}
+
+// Version asynchrone pour les presets
+async function updateParameterAsync(paramId, value) {
+  try {
+    const response = await fetch('/api/parameters', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id: parseInt(paramId), value: parseInt(value)})
+    });
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error('Erreur serveur: ' + data.message);
+    }
+    return data;
+  } catch (error) {
+    console.error('Erreur updateParameterAsync:', error);
+    throw error;
+  }
 }
 
 function updateAssignment(assignId, value) {
@@ -161,33 +180,32 @@ function savePreset(presetId) {
   .catch(e => showStatus('❌ Erreur de connexion'));
 }
 
-function loadPreset(presetId) {
+async function loadPreset(presetId) {
   console.log('DEBUG: loadPreset() appelée avec ID:', presetId);
   
-  fetch('/api/load-preset', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({id: parseInt(presetId) - 1}) // Convertir l'ID du bouton (1-8) en index de tableau (0-7)
-  })
-  .then(r => {
-    console.log('DEBUG: Réponse fetch reçue, status:', r.status);
-    return r.json();
-  })
-  .then(d => {
-    console.log('DEBUG: Données JSON reçues:', d);
+  try {
+    const response = await fetch('/api/load-preset', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id: parseInt(presetId) - 1}) // Convertir l'ID du bouton (1-8) en index de tableau (0-7)
+    });
     
-    if (d.success) {
+    console.log('DEBUG: Réponse fetch reçue, status:', response.status);
+    const data = await response.json();
+    console.log('DEBUG: Données JSON reçues:', data);
+    
+    if (data.success) {
       console.log('DEBUG: Début applyPresetToInterface');
       // Appliquer directement les valeurs du preset sans appeler l'API
-      applyPresetToInterface(d.parameters);
+      await applyPresetToInterface(data.parameters);
       console.log('DEBUG: applyPresetToInterface terminé');
       
       // Mettre à jour l'affichage de l'octave si présente dans la réponse
-      if (typeof d.octave !== 'undefined') {
-        console.log('DEBUG: Mise à jour octave:', d.octave);
+      if (typeof data.octave !== 'undefined') {
+        console.log('DEBUG: Mise à jour octave:', data.octave);
         const octaveDisplay = document.getElementById('octave-display');
         if (octaveDisplay) {
-          octaveDisplay.textContent = d.octave;
+          octaveDisplay.textContent = data.octave;
           console.log('DEBUG: Octave mise à jour dans le DOM');
         } else {
           console.log('DEBUG: Element octave-display non trouvé');
@@ -200,9 +218,9 @@ function loadPreset(presetId) {
       updateCurrentPresetDisplay(presetId);
       
       // Mettre à jour les assignations si présentes dans la réponse
-      if (d.assignments) {
-        console.log('DEBUG: Mise à jour assignations:', d.assignments);
-        applyAssignmentsToInterface(d.assignments);
+      if (data.assignments) {
+        console.log('DEBUG: Mise à jour assignations:', data.assignments);
+        applyAssignmentsToInterface(data.assignments);
         console.log('DEBUG: Assignations mises à jour');
       } else {
         console.log('DEBUG: Pas d\'assignations dans la réponse');
@@ -211,14 +229,13 @@ function loadPreset(presetId) {
       console.log('DEBUG: Affichage du status de succès');
       showStatus('✅ Preset ' + presetId + ' chargé');
     } else {
-      console.log('DEBUG: Échec du chargement:', d.message);
+      console.log('DEBUG: Échec du chargement:', data.message);
       showStatus('❌ Erreur chargement');
     }
-  })
-  .catch(e => {
-    console.error('DEBUG: Erreur fetch:', e);
+  } catch (error) {
+    console.error('DEBUG: Erreur fetch:', error);
     showStatus('❌ Erreur de connexion');
-  });
+  }
 }
 
 function loadCurrentParams() {
@@ -340,11 +357,16 @@ function applyAssignmentColors(assignments) {
 }
 
 // Nouvelle fonction : appliquer un preset directement à l'interface
-function applyPresetToInterface(presetValues) {
+async function applyPresetToInterface(presetValues) {
   if (!presetValues || presetValues.length !== 27) {
     console.error('Valeurs de preset invalides, attendu 27 paramètres, reçu:', presetValues?.length);
     return;
   }
+  
+  console.log('DEBUG: Début applyPresetToInterface avec', presetValues.length, 'paramètres');
+  
+  // Créer un tableau de promesses pour tous les updateParameter
+  const updatePromises = [];
   
   // Appliquer les paramètres principaux (0-20)
   for (let i = 0; i < 21; i++) {
@@ -368,6 +390,8 @@ function applyPresetToInterface(presetValues) {
       if (slider && valueDisplay) {
         slider.value = presetValues[i];
         valueDisplay.textContent = presetValues[i];
+        // Ajouter la promesse pour ce paramètre
+        updatePromises.push(updateParameterAsync(i, presetValues[i]));
       }
     }
   }
@@ -379,20 +403,18 @@ function applyPresetToInterface(presetValues) {
   if (filterCutoff) {
     filterCutoff.value = presetValues[21];
     document.getElementById('filter-cutoff-value').textContent = presetValues[21];
-    updateParameter(21, presetValues[21]); // Envoyer Cutoff au serveur
+    updatePromises.push(updateParameterAsync(21, presetValues[21])); // Envoyer Cutoff au serveur
   }
   if (filterReso) {
     filterReso.value = presetValues[22];
     document.getElementById('filter-reso-value').textContent = presetValues[22];
-    updateParameter(22, presetValues[22]); // Envoyer Résonance au serveur
+    updatePromises.push(updateParameterAsync(22, presetValues[22])); // Envoyer Résonance au serveur
   }
   
   // Mode filtre (paramètre 23 contient la valeur DMX 0-255)
   const filterModeValue = presetValues[23];
   
   console.log('DEBUG: Filter values - Cutoff:', presetValues[21], 'Reso:', presetValues[22], 'Mode:', filterModeValue);
-  console.log('DEBUG: Preset values array length:', presetValues.length);
-  console.log('DEBUG: Preset values 20-26:', presetValues.slice(20, 27));
   
   // Déterminer le mode selon la valeur DMX (0=OFF, 85=HP, 170=BP, 255=LP)
   let filterMode;
@@ -430,8 +452,8 @@ function applyPresetToInterface(presetValues) {
   document.getElementById('value-23').textContent = filterModeValue;
   
   // IMPORTANT: Envoyer le paramètre Filter On-Off au serveur
-  updateParameter(20, filterOnOffValue); // Filter On/Off 
-  updateParameter(23, filterModeValue);  // Filter Mode
+  updatePromises.push(updateParameterAsync(20, filterOnOffValue)); // Filter On/Off 
+  updatePromises.push(updateParameterAsync(23, filterModeValue));  // Filter Mode
   
   console.log('DEBUG: Filter On-Off envoyé au serveur:', filterOnOffValue);
   
@@ -441,9 +463,20 @@ function applyPresetToInterface(presetValues) {
   const rgbBlue = presetValues[26];
   
   updateRGBDisplay(rgbRed, rgbGreen, rgbBlue);
-  updateParameter(24, rgbRed);
-  updateParameter(25, rgbGreen);
-  updateParameter(26, rgbBlue);
+  updatePromises.push(updateParameterAsync(24, rgbRed));
+  updatePromises.push(updateParameterAsync(25, rgbGreen));
+  updatePromises.push(updateParameterAsync(26, rgbBlue));
+  
+  // Attendre que tous les paramètres soient envoyés
+  console.log('DEBUG: Attente de', updatePromises.length, 'paramètres...');
+  try {
+    await Promise.all(updatePromises);
+    console.log('DEBUG: Tous les paramètres envoyés avec succès');
+    showStatus('✅ Preset chargé et synchronisé');
+  } catch (error) {
+    console.error('DEBUG: Erreur lors de l\'envoi des paramètres:', error);
+    showStatus('❌ Erreur synchronisation preset');
+  }
   
   console.log('Preset appliqué à l\'interface (27 paramètres):', presetValues);
 }
@@ -605,6 +638,63 @@ function setupRGBControls() {
         updateParameter(26, rgb.b); // Index 26 = rgb1_blue
       }
     });
+  }
+}
+
+// === SYSTÈME DE DEBUG ===
+let debugPanelVisible = false;
+let debugRefreshInterval = null;
+
+// Fonction pour charger les messages de debug
+function loadDebugMessages() {
+  fetch('/api/debug')
+    .then(response => response.json())
+    .then(data => {
+      const debugMessagesDiv = document.getElementById('debug-messages');
+      if (data.messages) {
+        debugMessagesDiv.textContent = data.messages;
+        // Scroll vers le bas pour voir les derniers messages
+        debugMessagesDiv.scrollTop = debugMessagesDiv.scrollHeight;
+      } else {
+        debugMessagesDiv.textContent = 'Aucun message de debug disponible';
+      }
+    })
+    .catch(error => {
+      console.error('Erreur lors du chargement des messages de debug:', error);
+      document.getElementById('debug-messages').textContent = 'Erreur lors du chargement des messages de debug';
+    });
+}
+
+// Fonction pour effacer les messages de debug
+function clearDebugMessages() {
+  document.getElementById('debug-messages').textContent = 'Messages de debug effacés';
+}
+
+// Fonction pour basculer l'affichage du panneau de debug
+function toggleDebugPanel() {
+  const debugPanel = document.getElementById('debug-panel');
+  const debugToggle = document.getElementById('debug-toggle');
+  
+  debugPanelVisible = !debugPanelVisible;
+  
+  if (debugPanelVisible) {
+    debugPanel.style.display = 'block';
+    debugToggle.textContent = '🐛 Masquer Debug';
+    debugToggle.classList.add('active');
+    
+    // Charger les messages et démarrer le rafraîchissement automatique
+    loadDebugMessages();
+    debugRefreshInterval = setInterval(loadDebugMessages, 2000); // Rafraîchir toutes les 2 secondes
+  } else {
+    debugPanel.style.display = 'none';
+    debugToggle.textContent = '🐛 Debug';
+    debugToggle.classList.remove('active');
+    
+    // Arrêter le rafraîchissement automatique
+    if (debugRefreshInterval) {
+      clearInterval(debugRefreshInterval);
+      debugRefreshInterval = null;
+    }
   }
 }
 
@@ -902,4 +992,23 @@ function importPresets(file) {
   
   // Réinitialiser l'input file
   document.getElementById('import-file').value = '';
-}
+  
+  // === EVENT LISTENERS DE DEBUG ===
+  // Bouton toggle debug
+  const debugToggle = document.getElementById('debug-toggle');
+  if (debugToggle) {
+    debugToggle.addEventListener('click', toggleDebugPanel);
+  }
+  
+  // Bouton actualiser debug
+  const debugRefresh = document.getElementById('debug-refresh');
+  if (debugRefresh) {
+    debugRefresh.addEventListener('click', loadDebugMessages);
+  }
+  
+  // Bouton effacer debug
+  const debugClear = document.getElementById('debug-clear');
+  if (debugClear) {
+    debugClear.addEventListener('click', clearDebugMessages);
+  }
+};

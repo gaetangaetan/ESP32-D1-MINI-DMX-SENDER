@@ -11,7 +11,7 @@
         
 // adresse mac de l'onirigun : 68:C6:3A:FD:37:17 (géré par le récepteur Ksoloti)        
         
-#define VERSION 1757859520 // Version basée sur timestamp Unix        
+#define VERSION 1757941027 // Version basée sur timestamp Unix        
 /*        
 // Contrôleur interactif ESP32 avec capteurs Sharp IR        
 // Utilise ESP-NOW pour transmettre les données DMX        
@@ -115,7 +115,12 @@ typedef struct {
         
 // Fonctions de l'interface web        
 void setupWebInterface();        
+void setupWebInterfaceESP(); // Version pour point d'accès ESP
 void setupWebRoutes();        
+
+// Fonctions de debug web
+void addDebugMessage(String message);
+void handleGetDebugMessages();        
         
 void handleGetParameters();        
 void handleUpdateParameter();        
@@ -157,6 +162,18 @@ uint8_t webAssignments[4] = {0, 0, 0, 0}; // IR1, IR2, Fader2, Fader3 (0 = OFF, 
 uint8_t lastWebPreset = 0;            // Dernier preset web chargé        
 uint8_t webPresetCount = 0;           // Nombre de presets web sauvegardés        
 int8_t webOctave = 0;                 // Octave web (indépendante de la transposition)        
+
+// Variables pour les modes de fonctionnement
+enum OperatingMode {
+  MODE_STANDALONE = 0,    // Pas d'interface web
+  MODE_WIFI_LOCAL = 1,    // WiFi local avec WiFiManager
+  MODE_WIFI_ESP = 2       // Point d'accès ESP
+};
+OperatingMode currentOperatingMode = MODE_STANDALONE; // Mode par défaut
+
+// Variables pour le système de debug web
+String debugMessages = "";  // Buffer pour les messages de debug
+const int MAX_DEBUG_MESSAGES = 50;  // Nombre maximum de messages à conserver        
 
 // Variables pour l'uniformisation des presets        
 uint8_t selectedWebPreset = 1;        // Preset web sélectionné pour navigation (1-8)        
@@ -1328,6 +1345,258 @@ void setup_normal() {
   Serial.println("Le système est prêt à fonctionner");        
 }
 
+// === MODE STANDALONE (SANS INTERFACE WEB) ===
+void setup_standalone() {
+  Serial.println("=== MODE STANDALONE ACTIVÉ ===");
+  currentOperatingMode = MODE_STANDALONE;
+  
+  // Désactiver le Bluetooth pour améliorer la stabilité des lectures analogiques        
+  btStop();        
+  Serial.println("Bluetooth désactivé pour optimiser les lectures ADC");        
+          
+  // Afficher l'adresse MAC de l'ESP32        
+  Serial.print("Adresse MAC ESP32: ");        
+  Serial.println(WiFi.macAddress());        
+          
+  // FastLED déjà initialisé dans setup()        
+          
+  // Initialiser l'afficheur TM1637        
+  display.setBrightness(7); // Luminosité maximale        
+  Serial.println("Afficheur TM1637 initialisé");        
+          
+  // Initialiser l'encodeur rotatif        
+  encoder.attachSingleEdge(ENCODER_A_PIN, ENCODER_B_PIN);        
+  encoder.setCount(0);        
+  Serial.println("Encodeur rotatif initialisé");        
+          
+  // Configuration des pins pour les boutons        
+  pinMode(ENCODER_BUTTON_PIN, INPUT_PULLUP);        
+  pinMode(BUTTON_3_PIN, INPUT_PULLUP);        
+  Serial.println("Boutons configurés");        
+          
+  // Initialiser ESP-NOW        
+  WiFi.mode(WIFI_STA);        
+  if (esp_now_init() != ESP_OK) {        
+    Serial.println("Erreur lors de l'initialisation d'ESP-NOW");        
+    return;        
+  }        
+          
+  // Enregistrer la fonction de callback pour ESP-NOW        
+  esp_now_register_send_cb(OnDataSent);        
+          
+  // Ajouter le peer (récepteur ksoloti)        
+  memcpy(peerInfo.peer_addr, receiverAddress, 6);        
+  peerInfo.channel = 0;        
+  peerInfo.encrypt = false;        
+          
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {        
+    Serial.println("Erreur lors de l'ajout du peer");        
+    return;        
+  }        
+          
+  Serial.println("ESP-NOW initialisé avec succès");        
+          
+  // Initialiser les paramètres par défaut        
+  initializeParameters();        
+          
+  // Initialiser les presets        
+  initializePresets();        
+          
+  // Initialiser l'interface utilisateur        
+  initializeUserInterface();        
+          
+  // Indicateur LED déjà géré dans setup()
+          
+  Serial.println("Fréquence d'émission: " + String(EMISSION_FREQUENCY) + "Hz");        
+  Serial.println("Capteurs Sharp IR sur GPIO35 et GPIO36");        
+  Serial.println("Faders sur GPIO32, GPIO33, GPIO34");        
+  Serial.println("Encodeur KY-040 sur GPIO26, GPIO27, GPIO25");        
+  Serial.println("Afficheur TM1637 sur GPIO18, GPIO19");        
+  Serial.println("  Format d'affichage: TTPP (TT=transposition, PP=preset)");        
+  Serial.println("  Exemples: 0501=transpose +5/preset 1, -203=transpose -2/preset 3");        
+  Serial.println("Boutons push sur GPIO21, GPIO22, GPIO23");        
+  Serial.println("Bouton 1: Décrémenter transposition (-12 à +12)");        
+  Serial.println("Bouton 2: Incrémenter transposition (-12 à +12)");        
+  Serial.println("Bouton 3: Mute/Unmute (clic court) ou changement de preset (clic long)");        
+  Serial.println("Encodeur: Changer preset (rotation) ou octave (clic)");        
+  Serial.println("Ruban LED: Feedback visuel des capteurs IR et faders");        
+          
+  Serial.println("=== MODE STANDALONE INITIALISÉ ===");        
+  Serial.println("Interface web: DÉSACTIVÉE");        
+  Serial.println("ESP-NOW: ACTIVÉ");        
+  Serial.println("Le système est prêt à fonctionner en mode standalone");        
+}
+
+// === MODE WIFI LOCAL (AVEC INTERFACE WEB) ===
+void setup_wifi_local() {
+  Serial.println("=== MODE WIFI LOCAL ACTIVÉ ===");
+  currentOperatingMode = MODE_WIFI_LOCAL;
+  
+  // Désactiver le Bluetooth pour améliorer la stabilité des lectures analogiques        
+  btStop();        
+  Serial.println("Bluetooth désactivé pour optimiser les lectures ADC");        
+          
+  // Afficher l'adresse MAC de l'ESP32        
+  Serial.print("Adresse MAC ESP32: ");        
+  Serial.println(WiFi.macAddress());        
+          
+  // FastLED déjà initialisé dans setup()        
+          
+  // Initialiser l'afficheur TM1637        
+  display.setBrightness(7); // Luminosité maximale        
+  Serial.println("Afficheur TM1637 initialisé");        
+          
+  // Initialiser l'encodeur rotatif        
+  encoder.attachSingleEdge(ENCODER_A_PIN, ENCODER_B_PIN);        
+  encoder.setCount(0);        
+  Serial.println("Encodeur rotatif initialisé");        
+          
+  // Configuration des pins pour les boutons        
+  pinMode(ENCODER_BUTTON_PIN, INPUT_PULLUP);        
+  pinMode(BUTTON_3_PIN, INPUT_PULLUP);        
+  Serial.println("Boutons configurés");        
+          
+  // Initialiser ESP-NOW        
+  WiFi.mode(WIFI_STA);        
+  if (esp_now_init() != ESP_OK) {        
+    Serial.println("Erreur lors de l'initialisation d'ESP-NOW");        
+    return;        
+  }        
+          
+  // Enregistrer la fonction de callback pour ESP-NOW        
+  esp_now_register_send_cb(OnDataSent);        
+          
+  // Ajouter le peer (récepteur ksoloti)        
+  memcpy(peerInfo.peer_addr, receiverAddress, 6);        
+  peerInfo.channel = 0;        
+  peerInfo.encrypt = false;        
+          
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {        
+    Serial.println("Erreur lors de l'ajout du peer");        
+    return;        
+  }        
+          
+  Serial.println("ESP-NOW initialisé avec succès");        
+          
+  // Initialiser les paramètres par défaut        
+  initializeParameters();        
+          
+  // Initialiser les presets        
+  initializePresets();        
+          
+  // Initialiser l'interface utilisateur        
+  initializeUserInterface();        
+          
+  // Indicateur LED déjà géré dans setup()
+          
+  // Configuration du serveur web (WiFi Local)        
+  setupWebInterface();        
+          
+  Serial.println("Fréquence d'émission: " + String(EMISSION_FREQUENCY) + "Hz");        
+  Serial.println("Capteurs Sharp IR sur GPIO35 et GPIO36");        
+  Serial.println("Faders sur GPIO32, GPIO33, GPIO34");        
+  Serial.println("Encodeur KY-040 sur GPIO26, GPIO27, GPIO25");        
+  Serial.println("Afficheur TM1637 sur GPIO18, GPIO19");        
+  Serial.println("  Format d'affichage: TTPP (TT=transposition, PP=preset)");        
+  Serial.println("  Exemples: 0501=transpose +5/preset 1, -203=transpose -2/preset 3");        
+  Serial.println("Boutons push sur GPIO21, GPIO22, GPIO23");        
+  Serial.println("Bouton 1: Décrémenter transposition (-12 à +12)");        
+  Serial.println("Bouton 2: Incrémenter transposition (-12 à +12)");        
+  Serial.println("Bouton 3: Mute/Unmute (clic court) ou changement de preset (clic long)");        
+  Serial.println("Encodeur: Changer preset (rotation) ou octave (clic)");        
+  Serial.println("Ruban LED: Feedback visuel des capteurs IR et faders");        
+          
+  Serial.println("=== MODE WIFI LOCAL INITIALISÉ ===");        
+  Serial.println("Interface web: ACTIVÉE (WiFi Local)");        
+  Serial.println("ESP-NOW: ACTIVÉ");        
+  Serial.println("Le système est prêt à fonctionner en mode WiFi local");        
+}
+
+// === MODE WIFI ESP (POINT D'ACCÈS) ===
+void setup_wifi_esp() {
+  Serial.println("=== MODE WIFI ESP ACTIVÉ ===");
+  currentOperatingMode = MODE_WIFI_ESP;
+  
+  // Désactiver le Bluetooth pour améliorer la stabilité des lectures analogiques        
+  btStop();        
+  Serial.println("Bluetooth désactivé pour optimiser les lectures ADC");        
+          
+  // Afficher l'adresse MAC de l'ESP32        
+  Serial.print("Adresse MAC ESP32: ");        
+  Serial.println(WiFi.macAddress());        
+          
+  // FastLED déjà initialisé dans setup()        
+          
+  // Initialiser l'afficheur TM1637        
+  display.setBrightness(7); // Luminosité maximale        
+  Serial.println("Afficheur TM1637 initialisé");        
+          
+  // Initialiser l'encodeur rotatif        
+  encoder.attachSingleEdge(ENCODER_A_PIN, ENCODER_B_PIN);        
+  encoder.setCount(0);        
+  Serial.println("Encodeur rotatif initialisé");        
+          
+  // Configuration des pins pour les boutons        
+  pinMode(ENCODER_BUTTON_PIN, INPUT_PULLUP);        
+  pinMode(BUTTON_3_PIN, INPUT_PULLUP);        
+  Serial.println("Boutons configurés");        
+          
+  // Initialiser ESP-NOW        
+  WiFi.mode(WIFI_STA);        
+  if (esp_now_init() != ESP_OK) {        
+    Serial.println("Erreur lors de l'initialisation d'ESP-NOW");        
+    return;        
+  }        
+          
+  // Enregistrer la fonction de callback pour ESP-NOW        
+  esp_now_register_send_cb(OnDataSent);        
+          
+  // Ajouter le peer (récepteur ksoloti)        
+  memcpy(peerInfo.peer_addr, receiverAddress, 6);        
+  peerInfo.channel = 0;        
+  peerInfo.encrypt = false;        
+          
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {        
+    Serial.println("Erreur lors de l'ajout du peer");        
+    return;        
+  }        
+          
+  Serial.println("ESP-NOW initialisé avec succès");        
+          
+  // Initialiser les paramètres par défaut        
+  initializeParameters();        
+          
+  // Initialiser les presets        
+  initializePresets();        
+          
+  // Initialiser l'interface utilisateur        
+  initializeUserInterface();        
+          
+  // Indicateur LED déjà géré dans setup()
+          
+  // Configuration du serveur web (WiFi ESP - Point d'accès)        
+  setupWebInterfaceESP();        
+          
+  Serial.println("Fréquence d'émission: " + String(EMISSION_FREQUENCY) + "Hz");        
+  Serial.println("Capteurs Sharp IR sur GPIO35 et GPIO36");        
+  Serial.println("Faders sur GPIO32, GPIO33, GPIO34");        
+  Serial.println("Encodeur KY-040 sur GPIO26, GPIO27, GPIO25");        
+  Serial.println("Afficheur TM1637 sur GPIO18, GPIO19");        
+  Serial.println("  Format d'affichage: TTPP (TT=transposition, PP=preset)");        
+  Serial.println("  Exemples: 0501=transpose +5/preset 1, -203=transpose -2/preset 3");        
+  Serial.println("Boutons push sur GPIO21, GPIO22, GPIO23");        
+  Serial.println("Bouton 1: Décrémenter transposition (-12 à +12)");        
+  Serial.println("Bouton 2: Incrémenter transposition (-12 à +12)");        
+  Serial.println("Bouton 3: Mute/Unmute (clic court) ou changement de preset (clic long)");        
+  Serial.println("Encodeur: Changer preset (rotation) ou octave (clic)");        
+  Serial.println("Ruban LED: Feedback visuel des capteurs IR et faders");        
+          
+  Serial.println("=== MODE WIFI ESP INITIALISÉ ===");        
+  Serial.println("Interface web: ACTIVÉE (Point d'accès ESP)");        
+  Serial.println("ESP-NOW: ACTIVÉ");        
+  Serial.println("Le système est prêt à fonctionner en mode WiFi ESP");        
+}
+
 void setup()        
 {        
   Serial.begin(115200);        
@@ -1339,20 +1608,106 @@ void setup()
   // === VÉRIFICATION DU MODE DE DÉMARRAGE ===        
   Serial.println("Vérification du mode de démarrage...");        
   
-  // Vérifier si le bouton 1 est pressé au démarrage
-  pinMode(22, INPUT_PULLUP); // BUTTON_1_PIN
+  // Configuration des boutons
+  pinMode(BUTTON_1_PIN, INPUT_PULLUP); // GPIO22 - OTA
+  pinMode(BUTTON_2_PIN, INPUT_PULLUP); // GPIO21 - Mode WiFi
   delay(100); // Attendre la stabilisation
   
-  bool buttonPressed = !digitalRead(22); // Inversé car INPUT_PULLUP
-  Serial.print("État du bouton 1 au démarrage: ");
-  Serial.println(buttonPressed ? "PRESSÉ" : "RELAXÉ");
+  // Initialiser FastLED pour les indicateurs de mode
+  FastLED.addLeds<WS2812B, LED_STRIP_PIN, GRB>(leds, NUM_LEDS);        
+  FastLED.setBrightness(BRIGHTNESS);        
+  Serial.println("Ruban LED initialisé pour les indicateurs de mode");
   
-  if (buttonPressed) {
+  // Vérifier si le bouton 1 est pressé au démarrage (Mode OTA)
+  bool button1Pressed = !digitalRead(BUTTON_1_PIN); // Inversé car INPUT_PULLUP
+  Serial.print("État du bouton 1 au démarrage: ");
+  Serial.println(button1Pressed ? "PRESSÉ" : "RELAXÉ");
+  
+  if (button1Pressed) {
     setup_OTA(); // Cette fonction termine par un redémarrage
-  } else {
-    setup_normal(); // Mode normal
-  }        
-          
+    return; // Ne jamais atteint car setup_OTA() redémarre
+  }
+  
+  // Vérifier le bouton 2 pour les modes WiFi
+  bool button2Pressed = !digitalRead(BUTTON_2_PIN); // Inversé car INPUT_PULLUP
+  Serial.print("État du bouton 2 au démarrage: ");
+  Serial.println(button2Pressed ? "PRESSÉ" : "RELAXÉ");
+  
+  // === NOUVELLE LOGIQUE DE SÉLECTION ===
+  Serial.println("Début de la sélection du mode...");
+  
+  // Étape 1: Clignotement rose pendant 2 secondes (évaluation en cours)
+  Serial.println("Indicateur LED: Évaluation en cours (Rose)");
+  for (int blink = 0; blink < 20; blink++) { // 2 secondes = 20 x 100ms
+    for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i] = CRGB::Magenta; // Rose/Magenta
+    }
+    FastLED.show();
+    delay(100);
+    FastLED.clear();
+    FastLED.show();
+    delay(100);
+  }
+  
+  // Étape 2: Évaluation du bouton après le clignotement rose
+  bool buttonStillPressed = !digitalRead(BUTTON_2_PIN);
+  Serial.print("État du bouton 2 après clignotement rose: ");
+  Serial.println(buttonStillPressed ? "PRESSÉ" : "RELAXÉ");
+  
+  if (!buttonStillPressed) {
+    // Bouton relâché → Mode Standalone
+    Serial.println("Bouton relâché - Mode Standalone");
+    addDebugMessage("Bouton relâché - Mode Standalone");
+    setup_standalone();
+    return;
+  }
+  
+  // Bouton encore pressé → Clignotement cyan (Mode WiFi Local)
+  Serial.println("Bouton encore pressé - Clignotement cyan (Mode WiFi Local)");
+  addDebugMessage("Bouton encore pressé - Clignotement cyan (Mode WiFi Local)");
+  for (int blink = 0; blink < 20; blink++) { // 2 secondes = 20 x 100ms
+    for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i] = CRGB::Cyan;
+    }
+    FastLED.show();
+    delay(100);
+    FastLED.clear();
+    FastLED.show();
+    delay(100);
+  }
+  
+  // Étape 3: Évaluation finale du bouton après le clignotement cyan
+  bool buttonStillPressedFinal = !digitalRead(BUTTON_2_PIN);
+  Serial.print("État du bouton 2 après clignotement cyan: ");
+  Serial.println(buttonStillPressedFinal ? "PRESSÉ" : "RELAXÉ");
+  
+  if (!buttonStillPressedFinal) {
+    // Bouton relâché → Mode WiFi Local
+    Serial.println("Bouton relâché - Mode WiFi Local");
+    addDebugMessage("Bouton relâché - Mode WiFi Local");
+    setup_wifi_local();
+    return;
+  }
+  
+  // Bouton encore pressé → Clignotement jaune et Mode WiFi ESP
+  Serial.println("Bouton encore pressé - Clignotement jaune (Mode WiFi ESP)");
+  addDebugMessage("Bouton encore pressé - Clignotement jaune (Mode WiFi ESP)");
+  for (int blink = 0; blink < 20; blink++) { // 2 secondes = 20 x 100ms
+    for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i] = CRGB::Yellow;
+    }
+    FastLED.show();
+    delay(100);
+    FastLED.clear();
+    FastLED.show();
+    delay(100);
+  }
+  
+  // Mode WiFi ESP
+  Serial.println("Mode WiFi ESP confirmé");
+  addDebugMessage("Mode WiFi ESP confirmé");
+  setup_wifi_esp();
+  return;
 }        
         
 void sendDMXvalues()        
@@ -1541,10 +1896,13 @@ void loop()
   handleButtons();  // Gestion du bouton 3 (mute/unmute et clic long)
           
   // Gestion du serveur web (limité à 10Hz pour éviter la surcharge)        
-  static unsigned long lastWebServerUpdate = 0;        
-  if (millis() - lastWebServerUpdate >= 100) { // 100ms = 10Hz        
-    webServer.handleClient();        
-    lastWebServerUpdate = millis();        
+  // Seulement si l'interface web est activée (modes WiFi Local ou WiFi ESP)
+  if (currentOperatingMode != MODE_STANDALONE) {
+    static unsigned long lastWebServerUpdate = 0;        
+    if (millis() - lastWebServerUpdate >= 100) { // 100ms = 10Hz        
+      webServer.handleClient();        
+      lastWebServerUpdate = millis();        
+    }        
   }        
           
   // Gestion de l'encodeur KY-040        
@@ -1675,14 +2033,106 @@ void setupWebInterface() {
   Serial.println("Début du chargement des assignations web...");        
   loadWebAssignments();        
 }        
-        
-// Configuration des routes du serveur web        
+
+// Initialisation du système de fichiers et du serveur web (Mode Point d'accès ESP)
+void setupWebInterfaceESP() {        
+  // Initialiser le système de fichiers avec formatage forcé si nécessaire        
+  Serial.println("Initialisation de LittleFS...");        
+  if (!LittleFS.begin(true)) {        
+    Serial.println("Première tentative échouée, formatage forcé...");        
+    LittleFS.format();        
+    if (!LittleFS.begin(true)) {        
+      Serial.println("Erreur: Impossible d'initialiser LittleFS même après formatage");        
+      return;        
+    }        
+  }        
+  Serial.println("LittleFS initialisé avec succès");        
+          
+  // Vérifier que l'écriture fonctionne en créant un fichier de test        
+  File testFile = LittleFS.open("/test.txt", "w");        
+  if (testFile) {        
+    testFile.println("Test d'écriture LittleFS");        
+    testFile.close();        
+    Serial.println("Test d'écriture LittleFS réussi");        
+    LittleFS.remove("/test.txt"); // Nettoyer le fichier de test        
+  } else {        
+    Serial.println(" Erreur: Impossible d'écrire dans LittleFS");        
+  }        
+          
+  // Lister les fichiers disponibles        
+  File root = LittleFS.open("/");        
+  File file = root.openNextFile();        
+  Serial.println(" Fichiers disponibles dans LittleFS:");        
+  while (file) {        
+    Serial.print("  - ");        
+    Serial.print(file.name());        
+    Serial.print(" (");        
+    Serial.print(file.size());        
+    Serial.println(" bytes)");        
+    file = root.openNextFile();        
+  }        
+          
+  // Configuration du point d'accès WiFi
+  Serial.println("Configuration du point d'accès WiFi...");
+  const char* apSSID = "KsolotiKontrol-AP";
+  const char* apPassword = "ksoloti123";
+  
+  // Créer le point d'accès
+  WiFi.softAP(apSSID, apPassword);
+  
+  // Obtenir l'adresse IP du point d'accès
+  IPAddress apIP = WiFi.softAPIP();
+  Serial.print("Point d'accès créé: ");
+  Serial.println(apSSID);
+  Serial.print("Adresse IP: ");
+  Serial.println(apIP);
+  Serial.print("Mot de passe: ");
+  Serial.println(apPassword);
+  
+  // Configuration mDNS (optionnel pour le point d'accès)
+  Serial.println("Configuration mDNS...");
+  if (MDNS.begin(MDNS_HOSTNAME)) {
+    Serial.print("mDNS démarré avec le nom: ");
+    Serial.print(MDNS_HOSTNAME);
+    Serial.println(".local");
+    Serial.println("Interface web accessible via: http://ksolotikontrol.local");
+  } else {
+    Serial.println("Erreur lors du démarrage mDNS");
+  }
+  
+  // Ajouter le service HTTP
+  MDNS.addService("http", "tcp", 80);
+          
+  // Configurer les routes du serveur web        
+  setupWebRoutes();        
+          
+  // Démarrer le serveur web        
+  webServer.begin();        
+  Serial.println("Serveur web démarré");        
+          
+  // Initialiser les tableaux de presets web        
+  for (int i = 0; i < MAX_WEB_PRESETS; i++) {        
+    webPresets[i].name[0] = '\0'; // Marquer les slots comme vides        
+    webPresets[i].octave = 0;     // Initialiser l'octave à 0        
+  }        
+          
+  // Charger les presets web et assignations        
+  Serial.println("Début du chargement des presets web...");        
+  loadWebPresets();
+  
+  // Initialiser les presets vides si aucun preset n'existe
+  if (webPresetCount == 0) {
+    Serial.println("Aucun preset trouvé - Initialisation des presets vides...");
+    initializeEmptyWebPresets();
+  }
+  
+  Serial.println("Début du chargement des assignations web...");        
+  loadWebAssignments();        
+}        
+
+// Configuration des routes du serveur web
 void setupWebRoutes() {        
-  // Redirection automatique de la racine vers index.html        
-  webServer.on("/", HTTP_GET, []() {        
-    webServer.sendHeader("Location", "/index.html", true);        
-    webServer.send(302, "text/plain", "Redirection vers l'interface web...");        
-  });        
+  // La racine sera servie par serveStatic vers index.html        
           
   // Route de test simple (pour vérifier que le serveur fonctionne)        
   webServer.on("/test", HTTP_GET, []() {        
@@ -1733,6 +2183,9 @@ void setupWebRoutes() {
   // API pour exporter/importer les presets
   webServer.on("/api/export-presets", HTTP_GET, handleExportPresets);
   webServer.on("/api/import-presets", HTTP_POST, handleImportPresets);
+  
+  // API pour récupérer les messages de debug
+  webServer.on("/api/debug", HTTP_GET, handleGetDebugMessages);
           
   // API pour vérifier les changements physiques - DÉSACTIVÉ (trop lourd)       
   // webServer.on("/api/status", HTTP_GET, handleGetStatus);        
@@ -1742,6 +2195,43 @@ void setupWebRoutes() {
           
   // Gestion des erreurs 404        
   webServer.onNotFound(handleNotFound);        
+}        
+
+// === FONCTIONS DE DEBUG WEB ===
+
+// Fonction pour ajouter un message de debug
+void addDebugMessage(String message) {
+  // Ajouter un timestamp
+  String timestamp = String(millis());
+  String fullMessage = "[" + timestamp + "] " + message + "\n";
+  
+  // Ajouter le message au buffer
+  debugMessages += fullMessage;
+  
+  // Limiter le nombre de messages pour éviter la surcharge mémoire
+  int lineCount = 0;
+  for (int i = 0; i < debugMessages.length(); i++) {
+    if (debugMessages.charAt(i) == '\n') lineCount++;
+  }
+  
+  // Si trop de messages, supprimer les plus anciens
+  if (lineCount > MAX_DEBUG_MESSAGES) {
+    int firstNewline = debugMessages.indexOf('\n');
+    if (firstNewline != -1) {
+      debugMessages = debugMessages.substring(firstNewline + 1);
+    }
+  }
+}
+
+// API pour récupérer les messages de debug
+void handleGetDebugMessages() {
+  DynamicJsonDocument doc(4096);
+  doc["messages"] = debugMessages;
+  doc["count"] = debugMessages.length();
+  
+  String response;
+  serializeJson(doc, response);
+  webServer.send(200, "application/json", response);
 }        
         
 // API: Récupérer le statut système        
@@ -2051,12 +2541,33 @@ void handleNotFound() {
   Serial.print(" 404 - Page non trouvée: ");        
   Serial.println(path);        
           
-  // Vérifier si le fichier existe dans LittleFS        
+  // Vérifier si le fichier existe dans LittleFS et le servir        
   if (LittleFS.exists(path)) {        
-    Serial.println("  ⚠️ Le fichier existe dans LittleFS mais n'a pas pu être servi");        
+    Serial.println("  ⚠️ Le fichier existe dans LittleFS, tentative de service...");        
+    
+    File file = LittleFS.open(path, "r");        
+    if (file) {        
+      // Déterminer le type MIME        
+      String mimeType = "text/plain";        
+      if (path.endsWith(".html")) mimeType = "text/html";        
+      else if (path.endsWith(".css")) mimeType = "text/css";        
+      else if (path.endsWith(".js")) mimeType = "application/javascript";        
+      else if (path.endsWith(".json")) mimeType = "application/json";        
+      else if (path.endsWith(".png")) mimeType = "image/png";        
+      else if (path.endsWith(".jpg") || path.endsWith(".jpeg")) mimeType = "image/jpeg";        
+          
+      webServer.streamFile(file, mimeType);        
+      file.close();        
+      Serial.println("  ✅ Fichier servi avec succès");        
+    } else {        
+      Serial.println("  ❌ Impossible d'ouvrir le fichier");        
+      webServer.send(500, "text/plain", "Erreur serveur");        
+    }        
   } else {        
     Serial.println("   Le fichier n'existe pas dans LittleFS");        
+    webServer.send(404, "text/plain", "Fichier non trouvé");        
   }        
+}        
           
   String response = "Page non trouvée: " + path;        
   response += "\n\nFichiers disponibles:\n";        

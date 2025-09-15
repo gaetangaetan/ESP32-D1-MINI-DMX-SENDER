@@ -2,6 +2,12 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "../RECEPTEUR_KSOLOTI"
+		},
+		{
+			"path": "../ONIRIGUN juillet 2025"
 		}
 	],
 	"settings": {}
