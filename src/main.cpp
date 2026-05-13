@@ -1625,12 +1625,13 @@ void setup_wifi_esp() {
   Serial.println(selectedWebPreset);      
     
           
-  // IMPORTANT: Charger le preset P1 par défaut au démarrage
-  loadWebPresetUnified(0); // Charger P1 (index 0)
-  Serial.println("🚀 Preset P1 chargé par défaut");
-          
-  // Configuration du serveur web (WiFi ESP - Point d'accès)        
-  setupWebInterfaceESP();        
+  // Configuration du serveur web (WiFi ESP - Point d'accès)
+  // IMPORTANT: doit être avant loadWebPresetUnified pour que les presets LittleFS soient en mémoire
+  setupWebInterfaceESP();
+
+  // Charger le preset P1 par défaut APRÈS le chargement depuis LittleFS
+  loadWebPresetUnified(0);
+  Serial.println("🚀 Preset P1 chargé (depuis LittleFS)");        
           
   Serial.println("Fréquence d'émission: " + String(EMISSION_FREQUENCY) + "Hz");        
   Serial.println("Capteurs Sharp IR sur GPIO35 et GPIO36");        
