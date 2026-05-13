@@ -251,7 +251,7 @@ typedef struct struct_dmx_packet
 struct_dmx_packet outgoingDMXPacket;        
         
 // Adresse MAC du récepteur ESP8266        
-uint8_t receiverAddress[] = {0x2C, 0xF4, 0x32, 0x7A, 0x08, 0x1E};        
+uint8_t receiverAddress[] = {0xB4, 0xBF, 0xE9, 0x09, 0xFA, 0x00}; // nouvelle carte récepteur Ksoloti        
         
 esp_now_peer_info_t peerInfo; // Configuration du peer récepteur ESP8266        
         
@@ -1966,15 +1966,39 @@ void loop()
   // Mise à jour de l'afficheur TM1637        
   updateDisplay();        
           
-  // Émission à fréquence fixe (50Hz)        
+  // Émission à fréquence fixe (50Hz)
   if (millis() - lastEmissionTime >= EMISSION_INTERVAL) {        
             
     setlights();        
     sendDMXvalues();        
     lastEmissionTime = millis();        
-  }        
-          
-  delay(1); // Petit délai pour éviter de surcharger le CPU        
+  }
+
+  // Debug contrôles toutes les 2 secondes
+  static unsigned long lastControlDebug = 0;
+  if (millis() - lastControlDebug >= 2000) {
+    int ir1Raw = analogRead(DIST_SENSOR_1_PIN);
+    int ir2Raw = analogRead(DIST_SENSOR_2_PIN);
+    int f1Raw  = analogRead(FADER_1_PIN);
+    int f2Raw  = analogRead(FADER_2_PIN);
+    int f3Raw  = analogRead(FADER_3_PIN);
+    bool b1    = !digitalRead(BUTTON_1_PIN);
+    bool b2    = !digitalRead(BUTTON_2_PIN);
+    bool b3    = !digitalRead(BUTTON_3_PIN);
+    Serial.println("=== CONTROLES ===");
+    Serial.printf("  IR1  (GPIO%d): %4d -> DMX %3d\n", DIST_SENSOR_1_PIN, ir1Raw, ir1Raw / 16);
+    Serial.printf("  IR2  (GPIO%d): %4d -> DMX %3d\n", DIST_SENSOR_2_PIN, ir2Raw, ir2Raw / 16);
+    Serial.printf("  Fad1 (GPIO%d): %4d -> DMX %3d\n", FADER_1_PIN, f1Raw, f1Raw / 16);
+    Serial.printf("  Fad2 (GPIO%d): %4d -> DMX %3d\n", FADER_2_PIN, f2Raw, f2Raw / 16);
+    Serial.printf("  Fad3 (GPIO%d): %4d -> DMX %3d\n", FADER_3_PIN, f3Raw, f3Raw / 16);
+    Serial.printf("  Btn1 (GPIO%d): %s\n", BUTTON_1_PIN, b1 ? "APPUYE" : "releve");
+    Serial.printf("  Btn2 (GPIO%d): %s\n", BUTTON_2_PIN, b2 ? "APPUYE" : "releve");
+    Serial.printf("  Btn3 (GPIO%d): %s\n", BUTTON_3_PIN, b3 ? "APPUYE" : "releve");
+    Serial.println("=================");
+    lastControlDebug = millis();
+  }
+
+  delay(1); // Petit délai pour éviter de surcharger le CPU
 }        
         
 // ============================================================================        
