@@ -1724,11 +1724,8 @@ void sendDMXvalues()
     // Envoi du paquet via ESP-NOW        
     esp_err_t result = esp_now_send(receiverAddress, (uint8_t *)&outgoingDMXPacket, sizeof(outgoingDMXPacket));        
             
-    if (result == ESP_OK) {        
-      //Serial.print(" [OK]");        
-    } else {        
-      Serial.print(" [ERREUR]");        
-    }        
+    // ESP-NOW send errors are expected when receiver is not available
+    (void)result;        
   }        
           
   // Restaurer les valeurs originales après l'envoi (pour ne pas affecter les paramètres stockés)
