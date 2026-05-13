@@ -1665,102 +1665,26 @@ void setup()
   
   // Configuration des boutons
   pinMode(BUTTON_1_PIN, INPUT_PULLUP); // GPIO22 - OTA
-  pinMode(BUTTON_2_PIN, INPUT_PULLUP); // GPIO21 - Mode WiFi
+  pinMode(BUTTON_2_PIN, INPUT_PULLUP); // GPIO21 - réservé
   delay(100); // Attendre la stabilisation
-  
+
   // Initialiser FastLED pour les indicateurs de mode
-  FastLED.addLeds<WS2812B, LED_STRIP_PIN, GRB>(leds, NUM_LEDS);        
-  FastLED.setBrightness(BRIGHTNESS);        
-  Serial.println("Ruban LED initialisé pour les indicateurs de mode");
-  
-  // Vérifier si le bouton 1 est pressé au démarrage (Mode OTA)
-  bool button1Pressed = !digitalRead(BUTTON_1_PIN); // Inversé car INPUT_PULLUP
+  FastLED.addLeds<WS2812B, LED_STRIP_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.setBrightness(BRIGHTNESS);
+
+  // Bouton 1 pressé au démarrage → Mode OTA
+  bool button1Pressed = !digitalRead(BUTTON_1_PIN);
   Serial.print("État du bouton 1 au démarrage: ");
   Serial.println(button1Pressed ? "PRESSÉ" : "RELAXÉ");
-  
+
   if (button1Pressed) {
     setup_OTA(); // Cette fonction termine par un redémarrage
-    return; // Ne jamais atteint car setup_OTA() redémarre
-  }
-  
-  // Vérifier le bouton 2 pour les modes WiFi
-  bool button2Pressed = !digitalRead(BUTTON_2_PIN); // Inversé car INPUT_PULLUP
-  Serial.print("État du bouton 2 au démarrage: ");
-  Serial.println(button2Pressed ? "PRESSÉ" : "RELAXÉ");
-  
-  // === NOUVELLE LOGIQUE DE SÉLECTION ===
-  Serial.println("Début de la sélection du mode...");
-  
-  // Étape 1: Clignotement rose pendant 2 secondes (évaluation en cours)
-  Serial.println("Indicateur LED: Évaluation en cours (Rose)");
-  for (int blink = 0; blink < 20; blink++) { // 2 secondes = 20 x 100ms
-    for (int i = 0; i < NUM_LEDS; i++) {
-      leds[i] = CRGB::Magenta; // Rose/Magenta
-    }
-    FastLED.show();
-    delay(100);
-    FastLED.clear();
-    FastLED.show();
-    delay(100);
-  }
-  
-  // Étape 2: Évaluation du bouton après le clignotement rose
-  bool buttonStillPressed = !digitalRead(BUTTON_2_PIN);
-  Serial.print("État du bouton 2 après clignotement rose: ");
-  Serial.println(buttonStillPressed ? "PRESSÉ" : "RELAXÉ");
-  
-  if (!buttonStillPressed) {
-    // Bouton relâché → Mode Standalone
-    Serial.println("Bouton relâché - Mode Standalone");
-    addDebugMessage("Bouton relâché - Mode Standalone");
-    setup_standalone();
     return;
   }
-  
-  // Bouton encore pressé → Clignotement cyan (Mode WiFi Local)
-  Serial.println("Bouton encore pressé - Clignotement cyan (Mode WiFi Local)");
-  addDebugMessage("Bouton encore pressé - Clignotement cyan (Mode WiFi Local)");
-  for (int blink = 0; blink < 20; blink++) { // 2 secondes = 20 x 100ms
-    for (int i = 0; i < NUM_LEDS; i++) {
-      leds[i] = CRGB::Cyan;
-    }
-    FastLED.show();
-    delay(100);
-    FastLED.clear();
-    FastLED.show();
-    delay(100);
-  }
-  
-  // Étape 3: Évaluation finale du bouton après le clignotement cyan
-  bool buttonStillPressedFinal = !digitalRead(BUTTON_2_PIN);
-  Serial.print("État du bouton 2 après clignotement cyan: ");
-  Serial.println(buttonStillPressedFinal ? "PRESSÉ" : "RELAXÉ");
-  
-  if (!buttonStillPressedFinal) {
-    // Bouton relâché → Mode WiFi Local
-    Serial.println("Bouton relâché - Mode WiFi Local");
-    addDebugMessage("Bouton relâché - Mode WiFi Local");
-    setup_wifi_local();
-    return;
-  }
-  
-  // Bouton encore pressé → Clignotement jaune et Mode WiFi ESP
-  Serial.println("Bouton encore pressé - Clignotement jaune (Mode WiFi ESP)");
-  addDebugMessage("Bouton encore pressé - Clignotement jaune (Mode WiFi ESP)");
-  for (int blink = 0; blink < 20; blink++) { // 2 secondes = 20 x 100ms
-    for (int i = 0; i < NUM_LEDS; i++) {
-      leds[i] = CRGB::Yellow;
-    }
-    FastLED.show();
-    delay(100);
-    FastLED.clear();
-    FastLED.show();
-    delay(100);
-  }
-  
-  // Mode WiFi ESP
-  Serial.println("Mode WiFi ESP confirmé");
-  addDebugMessage("Mode WiFi ESP confirmé");
+
+  // Mode par défaut : Point d'accès WiFi (AP)
+  Serial.println("Démarrage en mode WiFi AP (point d'accès)");
+  addDebugMessage("Démarrage mode WiFi AP");
   setup_wifi_esp();
   return;
 }        
