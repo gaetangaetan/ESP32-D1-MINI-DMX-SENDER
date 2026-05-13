@@ -31,7 +31,7 @@
 #include <LittleFS.h>    // Pour le système de fichiers
 #include <ArduinoJson.h> // Pour le format JSON
 #include <WiFiManager.h> // Pour la gestion automatique du WiFi
-#include <ESPmDNS.h>     // Pour la résolution de nom mDNS
+// mDNS supprimé (non nécessaire en mode AP)
 #include "ota_update.h"  // Pour la fonctionnalité OTA
         
 #define CONTROL_TEST 0 // 1 pour tester les entrées, 0 pour le fonctionnement normal        
@@ -1993,21 +1993,7 @@ void setupWebInterface() {
   Serial.print("Adresse MAC: ");
   Serial.println(WiFi.macAddress());
   
-  // Configuration mDNS
-  Serial.println("Configuration mDNS...");
-  if (MDNS.begin(MDNS_HOSTNAME)) {
-    Serial.print("mDNS démarré avec le nom: ");
-    Serial.print(MDNS_HOSTNAME);
-    Serial.println(".local");
-    Serial.println("Interface web accessible via: http://ksolotikontrol.local");
-  } else {
-    Serial.println("Erreur lors du démarrage mDNS");
-  }
-  
-  // Ajouter le service HTTP
-  MDNS.addService("http", "tcp", 80);
-          
-  // Configurer les routes du serveur web        
+  // Configurer les routes du serveur web
   setupWebRoutes();        
           
   // Démarrer le serveur web        
@@ -2076,13 +2062,20 @@ void setupWebInterfaceESP() {
   Serial.println("Configuration du point d'accès WiFi...");
   const char* apSSID = "KsolotiKontrol-AP";
   const char* apPassword = "ksoloti123";
-  
-  // Créer le point d'accès avec optimisations
-  WiFi.softAP(apSSID, apPassword, 1, 0, 4); // Canal 1, visible, max 4 clients
-  
+
+  // IMPORTANT: passer en AP_STA pour garder STA (ESP-NOW) + activer AP
+  WiFi.mode(WIFI_AP_STA);
+  delay(100);
+
+  // Créer le point d'accès
+  bool apOk = WiFi.softAP(apSSID, apPassword, 6, 0, 4); // Canal 6, visible, max 4 clients
+  delay(500); // laisser le temps à l'AP de s'initialiser
+  Serial.print("softAP() = ");
+  Serial.println(apOk ? "OK" : "ECHEC");
+
   // Appliquer les optimisations AP
   optimizeAPMode();
-  
+
   // Obtenir l'adresse IP du point d'accès
   IPAddress apIP = WiFi.softAPIP();
   Serial.print("Point d'accès créé: ");
@@ -2091,20 +2084,7 @@ void setupWebInterfaceESP() {
   Serial.println(apIP);
   Serial.print("Mot de passe: ");
   Serial.println(apPassword);
-  
-  // Configuration mDNS (optionnel pour le point d'accès)
-  Serial.println("Configuration mDNS...");
-  if (MDNS.begin(MDNS_HOSTNAME)) {
-    Serial.print("mDNS démarré avec le nom: ");
-    Serial.print(MDNS_HOSTNAME);
-    Serial.println(".local");
-    Serial.println("Interface web accessible via: http://ksolotikontrol.local");
-  } else {
-    Serial.println("Erreur lors du démarrage mDNS");
-  }
-  
-  // Ajouter le service HTTP
-  MDNS.addService("http", "tcp", 80);
+  Serial.println("Interface web: http://192.168.4.1");
           
   // Configurer les routes du serveur web        
   setupWebRoutes();        
